@@ -268,6 +268,30 @@ function stripAnsi(str: string): string {
   return str.replace(/\x1B\[[0-?]*[ -/]*[@-~]/g, '');
 }
 
+/**
+ * Keep only what the agent printed AFTER the echo of the prompt we sent.
+ * Windows ConPTY sometimes repaints the whole visible screen (old output included) when text scrolls;
+ * without this, that old text was relayed to teammates as if it were the agent's answer.
+ */
+function stripEchoedPrompt(buffer: string, sentPrompt: string): string {
+  if (!sentPrompt) return buffer;
+  // Compare only plain ASCII letters/digits: terminals may alter accents, "·", commas or wrap lines.
+  const isPlain = (ch: string) => /[A-Za-z0-9]/.test(ch);
+  const marker = Array.from(sentPrompt).filter(isPlain).join('').slice(-16);
+  if (marker.length < 4) return buffer;
+  let compact = '';
+  const indexMap: number[] = [];
+  for (let i = 0; i < buffer.length; i++) {
+    if (isPlain(buffer[i])) {
+      compact += buffer[i];
+      indexMap.push(i);
+    }
+  }
+  const pos = compact.lastIndexOf(marker);
+  if (pos < 0) return buffer;
+  return buffer.slice(indexMap[pos + marker.length - 1] + 1);
+}
+
 export const ConsoleNode: React.FC<NodeProps> = ({ id, data, selected }) => {
   const nodeData = data as unknown as ConsoleNodeData;
   const terminalContainerRef = useRef<HTMLDivElement | null>(null);
@@ -338,6 +362,7 @@ export const ConsoleNode: React.FC<NodeProps> = ({ id, data, selected }) => {
   const startedAtRef = useRef<number>(0);
   const ptyTurnBufferRef = useRef<string>('');
   const ptyTurnActiveRef = useRef(false);
+  const lastSentPromptRef = useRef('');
 
   // Once a prompt has been consumed (cleared), the same text may legitimately be sent again.
   useEffect(() => {
@@ -359,8 +384,7 @@ export const ConsoleNode: React.FC<NodeProps> = ({ id, data, selected }) => {
     const executePrompt = async (text: string) => {
       if (window.agentCanvasAPI) {
         const singleLinePrompt = text.replace(/\r?\n+/g, ' ').trim();
-        ptyTurnBufferRef.current = '';
-        ptyTurnActiveRef.current = true;
+        ptyTurnActiveRef.current = false;
         try {
           // Reuse a live CLI session, or recreate it if a one-shot CLI exited after its previous reply.
           const session = await window.agentCanvasAPI.spawnPty(id, {
@@ -375,6 +399,10 @@ export const ConsoleNode: React.FC<NodeProps> = ({ id, data, selected }) => {
             // A fresh shell must launch the CLI before receiving its first task.
             await new Promise((resolve) => setTimeout(resolve, 2300));
           }
+          // Start capturing the reply only now, so nothing printed before this prompt leaks into it.
+          ptyTurnBufferRef.current = '';
+          lastSentPromptRef.current = singleLinePrompt;
+          ptyTurnActiveRef.current = true;
           window.agentCanvasAPI.writePty(id, `${singleLinePrompt}\r`);
         } catch (err) {
           ptyTurnActiveRef.current = false;
@@ -537,6 +565,7 @@ export const ConsoleNode: React.FC<NodeProps> = ({ id, data, selected }) => {
           promptsRef.current += 1;
           tokensRef.current += 6;
           ptyTurnBufferRef.current = '';
+          lastSentPromptRef.current = '';
           scheduleUsageFlush();
         } else {
           tokensRef.current += Math.max(1, Math.ceil(input.length / 4));
@@ -544,6 +573,11 @@ export const ConsoleNode: React.FC<NodeProps> = ({ id, data, selected }) => {
       });
 
       const unsubData = api.onPtyData((payload) => {
+        if (payload.id === id && payload.replay) {
+          // History re-sent to redraw a remounted terminal: display only, never count it as a new reply.
+          term.write(payload.data);
+          return;
+        }
         if (payload.id === id) {
           term.write(payload.data);
           appendTerminalScrollback(id, payload.data);
@@ -582,7 +616,7 @@ export const ConsoleNode: React.FC<NodeProps> = ({ id, data, selected }) => {
       const unsubPrompt = api.onPtyPrompt((payload) => {
         if (payload.id !== id || !ptyTurnActiveRef.current) return;
         ptyTurnActiveRef.current = false;
-        const reply = ptyTurnBufferRef.current.trim();
+        const reply = stripEchoedPrompt(ptyTurnBufferRef.current, lastSentPromptRef.current).trim();
         ptyTurnBufferRef.current = '';
         if (reply.length >= 20) {
           recordAgentReply({
@@ -603,7 +637,7 @@ export const ConsoleNode: React.FC<NodeProps> = ({ id, data, selected }) => {
           );
           if (ptyTurnActiveRef.current) {
             ptyTurnActiveRef.current = false;
-            const captured = ptyTurnBufferRef.current.trim();
+            const captured = stripEchoedPrompt(ptyTurnBufferRef.current, lastSentPromptRef.current).trim();
             ptyTurnBufferRef.current = '';
             recordAgentReply({
               nodeId: id,

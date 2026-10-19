@@ -164,7 +164,7 @@ class PtyManager {
       // Only replay history when a freshly mounted terminal needs it (never when sending a prompt).
       if (replayHistory && existing.historyBuffer) {
         setTimeout(() => {
-          this.sendToRenderer('pty:data', { id, data: existing.historyBuffer });
+          this.sendToRenderer('pty:data', { id, data: existing.historyBuffer, replay: true });
         }, 30);
       }
       return { ok: true, mode: existing.mode, reused: true };
@@ -427,8 +427,12 @@ class PtyManager {
       // Flush everything the agent printed while the console was paused.
       const buffered = session.pausedBuffer;
       session.pausedBuffer = '';
+      this.setStatus(id, 'running');
       this.sendToRenderer('pty:data', { id, data: buffered });
+      // Re-evaluate the status from what was printed during the pause (may switch to "waiting").
+      session.statusBuffer = '';
       this.inferStatusFromOutput(id, buffered);
+      return session.paused;
     }
     this.setStatus(id, session.paused ? 'waiting' : 'running');
     return session.paused;

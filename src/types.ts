@@ -217,7 +217,7 @@ export interface AgentCanvasBridge {
   getGitStatus?: (projectPath: string) => Promise<GitStatusResult>;
   pickFolder?: () => Promise<string | null>;
 
-  onPtyData: (cb: (payload: { id: string; data: string }) => void) => () => void;
+  onPtyData: (cb: (payload: { id: string; data: string; replay?: boolean }) => void) => () => void;
   onPtyStatus: (cb: (payload: { id: string; status: AgentStatus }) => void) => () => void;
   onPtyPrompt: (cb: (payload: { id: string }) => void) => () => void;
   onPtyExit: (cb: (payload: { id: string; exitCode?: number; signal?: number }) => void) => () => void;
