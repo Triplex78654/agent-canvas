@@ -1,0 +1,40 @@
+{
+  "name": "agent-canvas",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Agent Canvas - Infinite canvas dashboard to pilot CLI AI agents (Claude Code, Codex, Gemini CLI, Shell)",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "dev:vite": "vite --port 5173 --strictPort",
+    "dev:electron": "wait-on tcp:5173 && electron .",
+    "dev": "concurrently -k \"npm:dev:vite\" \"npm:dev:electron\"",
+    "build": "node scripts/generate-version.cjs && tsc -b && vite build",
+    "preview:web": "npm run build && vite preview --port 4173",
+    "deploy:cloudflare": "npm run build && npx wrangler pages deploy dist --project-name agent-canvas --branch main --commit-dirty=true"
+  },
+  "dependencies": {
+    "@xterm/addon-fit": "^0.10.0",
+    "@xterm/xterm": "^5.5.0",
+    "@xyflow/react": "^12.4.2",
+    "lucide-react": "^0.475.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "optionalDependencies": {
+    "node-pty": "^1.1.0-beta33"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.3",
+    "@types/node": "^22.10.0",
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
+    "@vitejs/plugin-react": "^4.3.4",
+    "concurrently": "^9.1.2",
+    "electron": "^44.9.0",
+    "postcss": "^8.5.1",
+    "tailwindcss": "^4.3.3",
+    "typescript": "~5.7.2",
+    "vite": "^6.1.0",
+    "wait-on": "^8.0.2"
+  }
+}
