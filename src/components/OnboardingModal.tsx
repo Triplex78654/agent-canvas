@@ -12,6 +12,8 @@ import {
   Rocket,
 } from 'lucide-react';
 import type { DetectedCli } from '../types';
+import { COMMAND_OPTIONS } from '../data/agentCatalog';
+import { pickStarterAgents } from '../lib/starterTeam';
 
 export const ONBOARDING_DONE_KEY = 'agent-canvas:onboarding-done:v1';
 
@@ -25,7 +27,8 @@ export function isOnboardingDone(): boolean {
 
 interface OnboardingModalProps {
   isOpen: boolean;
-  onClose: () => void;
+  /** Receives the detected AIs so the app can build a starter team with the ones really installed. */
+  onClose: (detected: DetectedCli[]) => void;
 }
 
 /** CLIs worth highlighting first: the ones most people will actually use. */
@@ -81,8 +84,12 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onClos
     try {
       localStorage.setItem(ONBOARDING_DONE_KEY, '1');
     } catch {}
-    onClose();
+    onClose(clis || []);
   };
+
+  const starter = pickStarterAgents(clis || []).map(
+    (id) => COMMAND_OPTIONS.find((o) => o.id === id)?.label || id
+  );
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
@@ -227,6 +234,13 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onClos
         </div>
 
         <div className="px-6 py-4 border-t border-[#2d2a37] bg-[#14121a] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div className="flex flex-col gap-1.5">
+          {starter.length > 0 && (
+            <p className="text-[11px] text-zinc-400">
+              Si ton canvas est vide, on te prépare une équipe avec{' '}
+              <strong className="text-zinc-200">{starter.join(' + ')}</strong> et une mission d'exemple.
+            </p>
+          )}
           <label className="flex items-center gap-2 text-xs text-zinc-300 cursor-pointer select-none">
             <input
               type="checkbox"
@@ -236,6 +250,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onClos
             />
             J'ai compris les coûts et les risques.
           </label>
+          </div>
           <button
             type="button"
             onClick={finish}

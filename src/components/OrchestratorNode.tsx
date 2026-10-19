@@ -44,7 +44,11 @@ const STATUS_DOT: Record<AgentStatus, string> = {
 
 export const OrchestratorNode: React.FC<NodeProps> = ({ data, selected }) => {
   const orchData = data as unknown as OrchestratorNodeData;
-  const [prompt, setPrompt] = useState('');
+  const [prompt, setPrompt] = useState(orchData.suggestedPrompt || '');
+  // Starter team: show the example mission as soon as it is attached (only if the box is still empty).
+  useEffect(() => {
+    if (orchData.suggestedPrompt) setPrompt((current) => current || orchData.suggestedPrompt || '');
+  }, [orchData.suggestedPrompt]);
   const [autoStartIdle, setAutoStartIdle] = useState(true);
   const [justSent, setJustSent] = useState(false);
   const [relayNotice, setRelayNotice] = useState<string | null>(null);

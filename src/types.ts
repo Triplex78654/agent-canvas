@@ -80,6 +80,8 @@ export interface OrchestratorNodeData extends Record<string, unknown> {
   collabMode?: TeamCollabMode;
   lastBroadcastPrompt?: string;
   lastBroadcastAt?: string;
+  /** Example mission shown in the mission box (starter team). Not saved. */
+  suggestedPrompt?: string;
   onBroadcastToTeam?: (
     teamId: string,
     prompt: string,

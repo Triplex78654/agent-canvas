@@ -70,6 +70,8 @@ import { QuotaWidget } from './components/QuotaWidget';
 import { AppUpdateButton } from './components/AppUpdateButton';
 import { CanvasZoomControls } from './components/CanvasZoomControls';
 import { BUILTIN_PRESETS, DEFAULT_MEMORY_NOTES } from './data/builtinPresets';
+import { STARTER_MISSION, pickStarterAgents } from './lib/starterTeam';
+import type { DetectedCli } from './types';
 import { ApiKeysModal } from './components/ApiKeysModal';
 import { AiHelpModal } from './components/AiHelpModal';
 import { SupportModal } from './components/SupportModal';
@@ -1032,6 +1034,78 @@ export default function App() {
   );
 
   // Spawn Git Workspace Node (Pillar 2)
+  /**
+   * After the welcome screen: give a first team made of the AIs really installed on this PC
+   * (instead of an empty canvas, or the example "Claude + Qwen" team that may not be installed).
+   * Never touches a canvas the user already worked on.
+   */
+  const handleOnboardingDone = useCallback(
+    (detected: DetectedCli[]) => {
+      const cmds = pickStarterAgents(detected);
+      if (cmds.length === 0) return;
+      const consoles = nodes.filter((n) => n.type === 'consoleNode');
+      const used = consoles.some((n) => {
+        const d = n.data as unknown as ConsoleNodeData;
+        return d.started || (d.promptsSent || 0) > 0;
+      });
+      if (used) return;
+      const labelOf = (cmd: AgentCommandType) => COMMAND_OPTIONS.find((o) => o.id === cmd)?.label || cmd;
+      const limitOf = (cmd: AgentCommandType) => COMMAND_OPTIONS.find((o) => o.id === cmd)?.defaultTokenLimit || 50000;
+      const markOrchestrator = (teamId: string | undefined) =>
+        setNodes((nds) =>
+          nds.map((n) =>
+            n.type === 'orchestratorNode' && teamId && (n.data as unknown as OrchestratorNodeData).teamId === teamId
+              ? { ...n, data: { ...n.data, collabMode: cmds.length > 1 ? 'relay' : 'split', suggestedPrompt: STARTER_MISSION } }
+              : n
+          )
+        );
+
+      const untouchedStarter =
+        consoles.length === 2 && consoles.every((n) => n.id === 'console-1' || n.id === 'console-2');
+      if (untouchedStarter) {
+        // Fresh install: swap the example agents for the installed ones.
+        setNodes((nds) =>
+          nds
+            .filter((n) => !(n.id === 'console-2' && cmds.length < 2))
+            .map((n) => {
+              const index = n.id === 'console-1' ? 0 : n.id === 'console-2' ? 1 : -1;
+              if (index < 0 || !cmds[index]) return n;
+              return {
+                ...n,
+                data: { ...n.data, commandType: cmds[index], label: labelOf(cmds[index]), tokenLimit: limitOf(cmds[index]) },
+              };
+            })
+        );
+        markOrchestrator((consoles[0].data as unknown as ConsoleNodeData).teamId || consoles[0].parentId);
+        return;
+      }
+      if (consoles.length > 0) return;
+
+      // Empty canvas: create the consoles, group them, then preset the relay mission.
+      const origin = findFreeSpot(nodes);
+      const newNodes = cmds.map((cmd, i) =>
+        buildConsoleNode({
+          label: labelOf(cmd),
+          commandType: cmd,
+          position: { x: origin.x + i * (DEFAULT_WIDTH + 40), y: origin.y },
+          tokenLimit: limitOf(cmd),
+        })
+      );
+      setNodes((nds) => [...nds, ...newNodes]);
+      createTeamFromConsoleIds(newNodes.map((n) => n.id));
+      setNodes((nds) => {
+        const teamId = nds.find((n) => n.id === newNodes[0].id)?.parentId;
+        return nds.map((n) =>
+          n.type === 'orchestratorNode' && teamId && (n.data as unknown as OrchestratorNodeData).teamId === teamId
+            ? { ...n, data: { ...n.data, collabMode: cmds.length > 1 ? 'relay' : 'split', suggestedPrompt: STARTER_MISSION } }
+            : n
+        );
+      });
+      setTimeout(() => rfInstanceRef.current?.fitView({ padding: 0.12, duration: 300 }), 150);
+    },
+    [nodes, setNodes, buildConsoleNode, createTeamFromConsoleIds]
+  );
+
   const handleSpawnWorkspace = useCallback(() => {
     const id = `workspace-${Date.now()}`;
     const newNode: Node = {
@@ -2383,8 +2457,9 @@ export default function App() {
       {/* Interactive Beginner Tutorial Modal */}
       <OnboardingModal
         isOpen={showOnboarding}
-        onClose={() => {
+        onClose={(detected) => {
           setShowOnboarding(false);
+          handleOnboardingDone(detected);
           if (!localStorage.getItem(TUTORIAL_SEEN_KEY)) setShowTutorialModal(true);
         }}
       />

@@ -508,7 +508,12 @@ function setupAutoUpdates() {
   });
   ipcMain.handle('app:installUpdate', (event) => {
     if (!isTrustedIpc(event) || !autoUpdater) return false;
-    setImmediate(() => autoUpdater.quitAndInstall());
+    // Silent install + relaunch: without these flags Windows showed the full setup wizard
+    // and the user had to click through it (and the app did not restart by itself).
+    setImmediate(() => {
+      if (ptyManager) ptyManager.killAll();
+      autoUpdater.quitAndInstall(true, true);
+    });
     return true;
   });
 
@@ -538,7 +543,22 @@ function setupAutoUpdates() {
   setInterval(check, 6 * 60 * 60 * 1000);
 }
 
+// One Agent Canvas at a time: two copies wrote the same canvas-state.json, and a hidden second copy
+// blocked the update installer. Launching it again just brings the open window to the front.
+const hasSingleInstanceLock = ISOLATED_TEST_MODE || app.requestSingleInstanceLock();
+if (!hasSingleInstanceLock) {
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    if (!mainWindow) return;
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+  });
+}
+
 app.whenReady().then(() => {
+  if (!hasSingleInstanceLock) return;
   createWindow();
   setupAutoUpdates();
 
