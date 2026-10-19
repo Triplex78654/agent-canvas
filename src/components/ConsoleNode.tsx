@@ -265,8 +265,37 @@ const STATUS_META: Record<
 };
 
 function stripAnsi(str: string): string {
-  return str.replace(/\x1B\[[0-?]*[ -/]*[@-~]/g, '');
+  return str
+    .replace(/\x1B\][^\x07\x1B]*(?:\x07|\x1B\\)?/g, '') // OSC (window title…) — was leaking "]0;C:\WINDOWS…"
+    .replace(/\x1B\[[0-?]*[ -/]*[@-~]/g, '') // CSI (colors, cursor moves)
+    .replace(/\x1B[@-Z\\-_]/g, '') // other 2-char escapes
+    .replace(/(^|\s)\]\d;[^\s\x07]*\x07?/g, '$1'); // OSC split across chunks (ESC in previous chunk)
 }
+
+/** A question on screen the CLI is waiting for (folder trust, login…): never type a mission into it. */
+const BLOCKING_DIALOG_RE =
+  /do you trust|trust (this|the) (folder|files|project|workspace|directory)|yes, i trust|enter to confirm|press enter to continue|select (a )?login method|sign in with|log ?in to (continue|your)|login required|choose (the|a) (text )?(style|theme)/i;
+/** The CLI is still producing its answer. */
+const WORKING_RE = /esc to (interrupt|cancel)|thinking\.\.\.|thinking…|working\.\.\.|working…/i;
+/** Interface chrome that is not part of an answer (input box, hints, footers). */
+const CHROME_LINE_RE =
+  /\? for shortcuts|esc to (interrupt|cancel|dismiss)|ctrl\+|shift\+tab|auto-accept|auto mode|bypass permissions|context left|tokens? (used|left)|for (help|commands)|type your message|^\s*[✻✳✢✶✽]\s|\b\w+(ed|t) for \d+(\.\d+)?\s*(s|m|ms)\b|\bdone \d{1,2}:\d{2}|\d+ tokens\b|update installed|restart to update|\/effort\b|\/model\b/i;
+
+function countLetters(text: string): number {
+  return (text.match(/[A-Za-zÀ-ÿ]/g) || []).length;
+}
+
+/** Turn raw terminal text into a clean answer: drop box borders, empty prompt lines and UI hints. */
+function cleanReplyText(text: string): string {
+  return text
+    .split(/\r?\n/)
+    .map((line) => line.replace(/[│┃╭╮╰╯─━┏┓┗┛▐▌▛▜▝▘]/g, ' ').trim())
+    .filter((line) => countLetters(line) >= 2 && !CHROME_LINE_RE.test(line) && !/^[>❯›]\s*$/.test(line))
+    .join('\n')
+    .trim();
+}
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
  * Keep only what the agent printed AFTER the echo of the prompt we sent.
@@ -276,14 +305,14 @@ function stripAnsi(str: string): string {
 function stripEchoedPrompt(buffer: string, sentPrompt: string): string {
   if (!sentPrompt) return buffer;
   // Compare only plain ASCII letters/digits: terminals may alter accents, "·", commas or wrap lines.
-  const isPlain = (ch: string) => /[A-Za-z0-9]/.test(ch);
-  const marker = Array.from(sentPrompt).filter(isPlain).join('').slice(-16);
+  const plain = (text: string) => text.normalize('NFD').replace(/[^A-Za-z0-9]/g, '');
+  const marker = plain(sentPrompt).slice(-40); // long enough that an answer quoting the question can't match
   if (marker.length < 4) return buffer;
   let compact = '';
   const indexMap: number[] = [];
   for (let i = 0; i < buffer.length; i++) {
-    if (isPlain(buffer[i])) {
-      compact += buffer[i];
+    for (const ch of plain(buffer[i])) {
+      compact += ch;
       indexMap.push(i);
     }
   }
@@ -363,6 +392,88 @@ export const ConsoleNode: React.FC<NodeProps> = ({ id, data, selected }) => {
   const ptyTurnBufferRef = useRef<string>('');
   const ptyTurnActiveRef = useRef(false);
   const lastSentPromptRef = useRef('');
+  const lastOutputAtRef = useRef(0);
+  const sentAtRef = useRef(0);
+  const waitingForReadyRef = useRef(false);
+
+  /** Text currently displayed by the terminal (what a human would see), or the last `maxLines` lines. */
+  const readTerminalText = (mode: 'screen' | 'tail', maxLines = 400): string => {
+    const term = xtermRef.current;
+    if (!term) return '';
+    const buf = term.buffer.active;
+    const start = mode === 'screen' ? buf.baseY : Math.max(0, buf.length - maxLines);
+    const end = mode === 'screen' ? buf.baseY + term.rows : buf.length;
+    const lines: string[] = [];
+    for (let i = start; i < end; i++) {
+      lines.push(buf.getLine(i)?.translateToString(true) ?? '');
+    }
+    return lines.join('\n');
+  };
+
+  const setAttention = (message: string | undefined) => {
+    if ((nodeDataRef.current.attentionRequired || undefined) === message) return;
+    nodeDataRef.current.onUpdateNode?.(id, {
+      attentionRequired: message,
+      ...(message ? { status: 'waiting' as const } : {}),
+    });
+  };
+
+  /**
+   * Wait until the CLI can receive a prompt: its screen is quiet, it is not busy,
+   * and no question (folder trust, login…) is waiting for the user.
+   */
+  const waitForCliReady = async (): Promise<'ready' | 'blocked' | 'stopped'> => {
+    const startedAt = Date.now();
+    waitingForReadyRef.current = true;
+    try {
+      while (true) {
+        if (!nodeDataRef.current.started) return 'stopped';
+        const screen = readTerminalText('screen');
+        if (BLOCKING_DIALOG_RE.test(screen)) {
+          setAttention('Action requise dans la console (question de la CLI) — réponds-y pour que la mission parte.');
+          if (Date.now() - startedAt > 15 * 60_000) return 'blocked';
+        } else {
+          setAttention(undefined);
+          const quietFor = Date.now() - lastOutputAtRef.current;
+          if (lastOutputAtRef.current > 0 && quietFor >= 1500 && !WORKING_RE.test(screen)) return 'ready';
+          // Busy for too long: send anyway, CLIs queue messages typed while they work.
+          if (Date.now() - startedAt > 3 * 60_000) return 'ready';
+        }
+        await sleep(250);
+      }
+    } finally {
+      waitingForReadyRef.current = false;
+    }
+  };
+
+  /** End of an agent turn: capture its answer and publish it (to the team relay) only if it is a real answer. */
+  const finishPtyTurn = (reason: 'prompt' | 'quiet' | 'exit', exitCode?: number) => {
+    if (!ptyTurnActiveRef.current) return;
+    ptyTurnActiveRef.current = false;
+    const sentPrompt = lastSentPromptRef.current;
+    // Prefer what the terminal actually displays (TUIs redraw a lot; the raw stream is messy).
+    let raw = '';
+    if (sentPrompt) {
+      const tail = readTerminalText('tail');
+      const afterEcho = stripEchoedPrompt(tail, sentPrompt);
+      if (afterEcho !== tail) raw = afterEcho;
+    }
+    if (!raw) raw = stripEchoedPrompt(ptyTurnBufferRef.current, sentPrompt);
+    ptyTurnBufferRef.current = '';
+    const reply = cleanReplyText(raw);
+    const isRealAnswer = countLetters(reply) >= 12;
+    if (!isRealAnswer && reason !== 'exit') return;
+    recordAgentReply({
+      nodeId: id,
+      label: nodeDataRef.current.label || 'Console',
+      commandType: selectedCmdRef.current,
+      teamId: nodeDataRef.current.teamId,
+      text: isRealAnswer
+        ? reply
+        : `La session IA s'est arrêtée avant de fournir une réponse (code ${exitCode ?? 'inconnu'}).`,
+      timestamp: new Date().toLocaleTimeString(),
+    });
+  };
 
   // Once a prompt has been consumed (cleared), the same text may legitimately be sent again.
   useEffect(() => {
@@ -396,26 +507,33 @@ export const ConsoleNode: React.FC<NodeProps> = ({ id, data, selected }) => {
           });
           if (!session.ok) throw new Error('Impossible de démarrer la console.');
           if (!session.reused) {
-            // A fresh shell must launch the CLI before receiving its first task.
-            await new Promise((resolve) => setTimeout(resolve, 2300));
+            // Give the shell a moment to launch the CLI before checking whether it is ready.
+            await sleep(1200);
+          }
+          // Wait for the CLI to be really ready (no fixed delay: Claude/Gemini can take several seconds,
+          // and may first ask a question such as "Do you trust this folder?").
+          const readiness = await waitForCliReady();
+          if (readiness === 'stopped') return;
+          if (readiness === 'blocked') {
+            throw new Error("la CLI attend toujours une réponse dans la console (question de confiance / connexion).");
           }
           // Start capturing the reply only now, so nothing printed before this prompt leaks into it.
           ptyTurnBufferRef.current = '';
           lastSentPromptRef.current = singleLinePrompt;
+          sentAtRef.current = Date.now();
           ptyTurnActiveRef.current = true;
-          window.agentCanvasAPI.writePty(id, `${singleLinePrompt}\r`);
+          // Type the text, then press Enter separately: full-screen CLIs (Claude Code, Gemini…) treat a long
+          // burst of input as a paste, and an Enter inside that burst becomes a newline instead of "send".
+          window.agentCanvasAPI.writePty(id, singleLinePrompt);
+          await sleep(Math.min(1500, 250 + Math.ceil(singleLinePrompt.length / 4)));
+          window.agentCanvasAPI.writePty(id, '\r');
+          sentAtRef.current = Date.now();
         } catch (err) {
           ptyTurnActiveRef.current = false;
           const message = err instanceof Error ? err.message : String(err);
           nodeDataRef.current.onUpdateNode?.(id, { status: 'error' });
-          recordAgentReply({
-            nodeId: id,
-            label: nodeDataRef.current.label || 'Console',
-            commandType: selectedCmdRef.current,
-            teamId: nodeDataRef.current.teamId,
-            text: `Échec du lancement de la mission : ${message}`,
-            timestamp: new Date().toLocaleTimeString(),
-          });
+          // Shown in the console only: a launch failure must never be relayed to teammates as an "answer".
+          xtermRef.current?.writeln(`\r\n\x1b[31m[Mission non envoyée] ${message}\x1b[0m`);
         }
       } else if (webPromptRunnerRef.current) {
         webPromptRunnerRef.current(text);
@@ -560,7 +678,11 @@ export const ConsoleNode: React.FC<NodeProps> = ({ id, data, selected }) => {
           ptyTurnActiveRef.current = false;
           ptyTurnBufferRef.current = '';
         }
-        if (input.includes('\r') || input.includes('\n')) {
+        if (
+          (input.includes('\r') || input.includes('\n')) &&
+          !waitingForReadyRef.current &&
+          !BLOCKING_DIALOG_RE.test(readTerminalText('screen'))
+        ) {
           ptyTurnActiveRef.current = true;
           promptsRef.current += 1;
           tokensRef.current += 6;
@@ -581,6 +703,7 @@ export const ConsoleNode: React.FC<NodeProps> = ({ id, data, selected }) => {
         if (payload.id === id) {
           term.write(payload.data);
           appendTerminalScrollback(id, payload.data);
+          lastOutputAtRef.current = Date.now();
 
           const clean = stripAnsi(payload.data);
           const charCount = clean.replace(/\s+/g, ' ').trim().length;
@@ -615,41 +738,35 @@ export const ConsoleNode: React.FC<NodeProps> = ({ id, data, selected }) => {
 
       const unsubPrompt = api.onPtyPrompt((payload) => {
         if (payload.id !== id || !ptyTurnActiveRef.current) return;
-        ptyTurnActiveRef.current = false;
-        const reply = stripEchoedPrompt(ptyTurnBufferRef.current, lastSentPromptRef.current).trim();
-        ptyTurnBufferRef.current = '';
-        if (reply.length >= 20) {
-          recordAgentReply({
-            nodeId: id,
-            label: nodeDataRef.current.label || 'Console',
-            commandType: selectedCmdRef.current,
-            teamId: nodeDataRef.current.teamId,
-            text: reply,
-            timestamp: new Date().toLocaleTimeString(),
-          });
-        }
+        // A dialog line (e.g. "❯ Yes, I trust this folder") looks like a prompt: it is not the end of an answer.
+        if (BLOCKING_DIALOG_RE.test(readTerminalText('screen'))) return;
+        finishPtyTurn('prompt');
       });
+
+      // Full-screen AI CLIs (Claude Code, Gemini, Agy…) never print a shell prompt:
+      // their answer is over when the screen has been quiet for a while and they no longer show "esc to interrupt".
+      const turnWatcher = setInterval(() => {
+        if (!ptyTurnActiveRef.current || !lastSentPromptRef.current) return;
+        if (selectedCmdRef.current === 'shell') return;
+        const now = Date.now();
+        if (now - sentAtRef.current < 3000) return;
+        if (lastOutputAtRef.current <= sentAtRef.current) return;
+        if (now - lastOutputAtRef.current < 4000) return;
+        const screen = readTerminalText('screen');
+        if (WORKING_RE.test(screen)) return;
+        if (BLOCKING_DIALOG_RE.test(screen)) {
+          setAttention("Action requise dans la console — l'IA attend ta réponse.");
+          return;
+        }
+        finishPtyTurn('quiet');
+      }, 500);
 
       const unsubExit = api.onPtyExit((payload) => {
         if (payload.id === id) {
           term.writeln(
             `\r\n\x1b[90m[Processus terminé avec le code ${payload.exitCode ?? 0}]\x1b[0m`
           );
-          if (ptyTurnActiveRef.current) {
-            ptyTurnActiveRef.current = false;
-            const captured = stripEchoedPrompt(ptyTurnBufferRef.current, lastSentPromptRef.current).trim();
-            ptyTurnBufferRef.current = '';
-            recordAgentReply({
-              nodeId: id,
-              label: nodeDataRef.current.label || 'Console',
-              commandType: selectedCmdRef.current,
-              teamId: nodeDataRef.current.teamId,
-              text:
-                captured ||
-                `La session IA s'est arrêtée avant de fournir une réponse (code ${payload.exitCode ?? 'inconnu'}).`,
-              timestamp: new Date().toLocaleTimeString(),
-            });
-          }
+          finishPtyTurn('exit', payload.exitCode);
         }
       });
 
@@ -663,6 +780,7 @@ export const ConsoleNode: React.FC<NodeProps> = ({ id, data, selected }) => {
 
       return () => {
         if (flushTimer) clearTimeout(flushTimer);
+        clearInterval(turnWatcher);
         resizeObserver.disconnect();
         inputDisposable.dispose();
         unsubData();
@@ -1356,6 +1474,15 @@ export const ConsoleNode: React.FC<NodeProps> = ({ id, data, selected }) => {
             <span className="text-zinc-400 truncate">
               {activeOptionMeta.quotaLabel}
             </span>
+            {nodeData.attentionRequired && (
+              <span
+                className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 font-medium animate-pulse"
+                title={nodeData.attentionRequired}
+              >
+                <AlertTriangle className="w-2.5 h-2.5" />
+                Action requise
+              </span>
+            )}
             {nodeData.rateLimitWarning && (
               <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded bg-red-500/20 text-red-400 font-medium">
                 <AlertTriangle className="w-2.5 h-2.5" />

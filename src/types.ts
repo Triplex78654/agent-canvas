@@ -27,6 +27,8 @@ export interface ConsoleNodeData extends Record<string, unknown> {
   estimatedTokens?: number;
   tokenLimit?: number;
   rateLimitWarning?: string;
+  /** Message affiché quand la CLI attend une réponse de l'utilisateur (confiance du dossier, connexion…). */
+  attentionRequired?: string;
   /** Dossier de travail (projet) dans lequel la console est lancée. */
   projectCwd?: string;
   onUpdateNode?: (id: string, patch: Partial<ConsoleNodeData>) => void;

@@ -2757,6 +2757,7 @@ export default function App() {
   // Auto-save whenever state changes (throttled: at most one disk write every 2s, always ending with the latest state)
   const latestSaveArgsRef = useRef<[Node[], Edge[], CanvasPreset[], string] | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const saveScheduledAtRef = useRef(0);
   const lastSaveAtRef = useRef(0);
   const lastSavedSnapshotRef = useRef('');
   const persistStateNowRef = useRef(persistStateNow);
@@ -2764,7 +2765,9 @@ export default function App() {
   useEffect(() => {
     if (!isLoaded) return;
     latestSaveArgsRef.current = [nodes, edges, customPresets, memoryNotes];
-    if (saveTimerRef.current) return;
+    if (saveTimerRef.current && Date.now() - saveScheduledAtRef.current < 10_000) return;
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveScheduledAtRef.current = Date.now();
     const wait = Math.max(350, 2000 - (Date.now() - lastSaveAtRef.current));
     saveTimerRef.current = setTimeout(() => {
       saveTimerRef.current = null;
@@ -2790,7 +2793,11 @@ export default function App() {
     window.addEventListener('beforeunload', flush);
     return () => {
       window.removeEventListener('beforeunload', flush);
+      // Save what is pending AND release the slot: leaving a cancelled timer id here blocked every
+      // later save after a hot reload (the Workspace panel was then lost on the next restart).
+      flush();
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
     };
   }, []);
 

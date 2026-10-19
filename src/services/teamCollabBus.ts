@@ -94,6 +94,8 @@ export function clearCachedWebChatHistory(nodeId: string) {
 
 export function sanitizeTerminalOutputForRelay(rawText: string): string {
   return rawText
+    .replace(/\x1B\][^\x07\x1B]*(?:\x07|\x1B\\)?/g, '')
+    .replace(/(^|\s)\]\d;[^\s\x07]*\x07?/g, '$1')
     .replace(/\x1B\[[0-?]*[ -/]*[@-~]/g, '')
     .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
     .replace(/>>> Send a message \(.*?\)/gi, '')
