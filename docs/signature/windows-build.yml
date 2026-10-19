@@ -1,0 +1,46 @@
+# Build Windows signé par SignPath (à activer APRÈS l'acceptation de SignPath Foundation).
+# Pour l'activer : déplace ce fichier dans .github/workflows/ et remplis les secrets du dépôt
+# SIGNPATH_API_TOKEN et SIGNPATH_ORGANIZATION_ID (fournis par SignPath).
+name: Build Windows (signé)
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run dist:win
+
+      - name: Envoyer l'installateur non signé
+        id: unsigned
+        uses: actions/upload-artifact@v4
+        with:
+          name: installateur-non-signe
+          path: release/Agent-Canvas-Setup-*.exe
+
+      - name: Signature SignPath (validation manuelle par toi sur signpath.io)
+        uses: signpath/github-action-submit-signing-request@v1
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ secrets.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: agent-canvas            # nom donné par SignPath
+          signing-policy-slug: release-signing  # nom donné par SignPath
+          github-artifact-id: ${{ steps.unsigned.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: release-signee
+
+      - name: Garder l'installateur signé
+        uses: actions/upload-artifact@v4
+        with:
+          name: installateur-signe
+          path: release-signee/

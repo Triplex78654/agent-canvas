@@ -3,6 +3,7 @@ import { NodeProps, NodeResizer } from '@xyflow/react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
+import { fixXtermMouseForCssScale } from '../lib/xtermScaleFix';
 import {
   Play,
   Pause,
@@ -399,6 +400,8 @@ export const ConsoleNode: React.FC<NodeProps> = ({ id, data, selected }) => {
     const fitAddon = new FitAddon();
     term.loadAddon(fitAddon);
     term.open(terminalContainerRef.current);
+    // The canvas is zoomable: without this, selecting/copying text hit the wrong lines.
+    fixXtermMouseForCssScale(term);
 
     xtermRef.current = term;
     fitAddonRef.current = fitAddon;
