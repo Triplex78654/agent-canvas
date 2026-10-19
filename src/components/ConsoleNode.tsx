@@ -855,7 +855,7 @@ export const ConsoleNode: React.FC<NodeProps> = ({ id, data, selected }) => {
           writelnAndCache('\x1b[36mCommandes disponibles (Mode Web) :\x1b[0m');
           writelnAndCache('  \x1b[33m/guide\x1b[0m          Ouvrir la fiche d’aide & commandes de cette IA (' + selectedCmdRef.current + ')');
           writelnAndCache('  \x1b[33m/tuto\x1b[0m           Ouvrir le tutoriel interactif complet pour débutants');
-          writelnAndCache('  \x1b[33m/support\x1b[0m        Signaler un problème directement à Louis');
+          writelnAndCache('  \x1b[33m/support\x1b[0m        Signaler un problème (ticket GitHub pré-rempli)');
           writelnAndCache('  \x1b[33m/key <CLE_API>\x1b[0m  Enregistrer votre clé API pour cet agent (ex: /key AIza... ou /key sk-or-...)');
           writelnAndCache('  \x1b[33m/keys\x1b[0m           Ouvrir la fenêtre de gestion de toutes vos clés API');
           writelnAndCache('  \x1b[33m/clear\x1b[0m          Effacer l’écran du terminal');

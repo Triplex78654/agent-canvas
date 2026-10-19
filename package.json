@@ -1,8 +1,8 @@
 {
   "name": "agent-canvas",
-  "version": "0.1.0",
+  "version": "1.4.0",
   "private": true,
-  "description": "Agent Canvas - Infinite canvas dashboard to pilot CLI AI agents (Claude Code, Codex, Gemini CLI, Shell)",
+  "description": "Agent Canvas - Canvas infini pour piloter plusieurs IA en ligne de commande (Claude Code, Codex, Gemini CLI, Antigravity, Ollama…)",
   "main": "electron/main.cjs",
   "scripts": {
     "dev:vite": "vite --port 5173 --strictPort",
@@ -10,7 +10,9 @@
     "dev": "concurrently -k \"npm:dev:vite\" \"npm:dev:electron\"",
     "build": "node scripts/generate-version.cjs && tsc -b && vite build",
     "preview:web": "npm run build && vite preview --port 4173",
-    "deploy:cloudflare": "npm run build && npx wrangler pages deploy dist --project-name agent-canvas --branch main --commit-dirty=true"
+    "deploy:cloudflare": "npm run build && npx wrangler pages deploy dist --project-name agent-canvas --branch main --commit-dirty=true",
+    "dist:win": "npm run build && electron-builder --win nsis --publish never",
+    "release:win": "npm run build && electron-builder --win nsis --publish always"
   },
   "dependencies": {
     "@xterm/addon-fit": "^0.10.0",
@@ -18,7 +20,8 @@
     "@xyflow/react": "^12.4.2",
     "lucide-react": "^0.475.0",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "electron-updater": "^6.8.9"
   },
   "optionalDependencies": {
     "node-pty": "^1.1.0-beta33"
@@ -35,6 +38,62 @@
     "tailwindcss": "^4.3.3",
     "typescript": "~5.7.2",
     "vite": "^6.1.0",
-    "wait-on": "^8.0.2"
+    "wait-on": "^8.0.2",
+    "electron-builder": "^26.15.3"
+  },
+  "author": "Triplex78654",
+  "license": "MIT",
+  "homepage": "https://github.com/Triplex78654/agent-canvas",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Triplex78654/agent-canvas.git"
+  },
+  "build": {
+    "appId": "com.triplex78654.agentcanvas",
+    "productName": "Agent Canvas",
+    "copyright": "Copyright © 2026 Triplex78654",
+    "directories": {
+      "output": "release",
+      "buildResources": "build-resources"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
+    "asarUnpack": [
+      "node_modules/node-pty/**/*"
+    ],
+    "npmRebuild": false,
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "public/icon.ico",
+      "artifactName": "Agent-Canvas-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Agent Canvas",
+      "installerIcon": "public/icon.ico",
+      "uninstallerIcon": "public/icon.ico"
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "Triplex78654",
+        "repo": "agent-canvas",
+        "releaseType": "release"
+      }
+    ]
   }
 }

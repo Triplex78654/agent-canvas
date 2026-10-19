@@ -1,5 +1,8 @@
 node_modules/
 dist/
+release/
 .wrangler/
 *.tsbuildinfo
 _backup-avant-corrections/
+*.log
+build-installer.result

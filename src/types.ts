@@ -128,6 +128,7 @@ export interface PersistedNodeRecord {
   branchName?: string;
   intervalMinutes?: number;
   triggerActive?: boolean;
+  collabMode?: TeamCollabMode;
 }
 
 export interface PersistedEdgeRecord {
@@ -186,6 +187,15 @@ export interface StorageSaveResult {
   error?: string;
 }
 
+export interface DetectedCli {
+  id: string;
+  binary: string;
+  title: string;
+  installHint: string | null;
+  installed: boolean;
+  path: string | null;
+}
+
 export interface GitStatusResult {
   ok: boolean;
   error?: string;
@@ -218,6 +228,10 @@ export interface AgentCanvasBridge {
   getStoragePath: () => Promise<string>;
   getGitStatus?: (projectPath: string) => Promise<GitStatusResult>;
   pickFolder?: () => Promise<string | null>;
+  detectClis?: () => Promise<DetectedCli[]>;
+  getAppInfo?: () => Promise<{ version: string; packaged: boolean; platform: string } | null>;
+  installUpdate?: () => Promise<boolean>;
+  onAppUpdate?: (cb: (payload: { state: 'downloading' | 'ready'; version?: string }) => void) => () => void;
 
   onPtyData: (cb: (payload: { id: string; data: string; replay?: boolean }) => void) => () => void;
   onPtyStatus: (cb: (payload: { id: string; status: AgentStatus }) => void) => () => void;

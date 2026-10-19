@@ -220,6 +220,8 @@ class PtyManager {
           buffer: '',
           historyBuffer: '',
           pausedBuffer: '',
+          cols,
+          rows,
         };
 
         ptyProcess.onData((data) => {
@@ -412,9 +414,16 @@ class PtyManager {
   resizeSession(id, cols, rows) {
     const session = this.sessions.get(id);
     if (!session) return;
+    const nextCols = Math.max(20, cols);
+    const nextRows = Math.max(5, rows);
+    // Windows ConPTY repaints the whole visible screen on every resize, even to the same size:
+    // that repaint was re-sent as "new output" and old text leaked into agent replies.
+    if (session.cols === nextCols && session.rows === nextRows) return;
     if (session.mode === 'node-pty' && typeof session.process.resize === 'function') {
       try {
-        session.process.resize(Math.max(20, cols), Math.max(5, rows));
+        session.process.resize(nextCols, nextRows);
+        session.cols = nextCols;
+        session.rows = nextRows;
       } catch (_) {}
     }
   }
@@ -455,4 +464,42 @@ class PtyManager {
   }
 }
 
-module.exports = { PtyManager };
+/** PATH used for terminals (and CLI detection): user-level install dirs are not always in Electron's PATH. */
+function buildEnrichedPath() {
+  const home = os.homedir();
+  const extraPaths =
+    os.platform() === 'win32'
+      ? [`${home}\\.local\\bin`, `${home}\\AppData\\Local\\Programs\\Ollama`, `${home}\\AppData\\Roaming\\npm`, `${home}\\AppData\\Local\\nodejs`]
+      : [`${home}/.local/bin`, '/usr/local/bin', '/opt/homebrew/bin'];
+  const sep = os.platform() === 'win32' ? ';' : ':';
+  return [...extraPaths, process.env.PATH || process.env.Path || ''].join(sep);
+}
+
+/** Which AI CLIs are installed on this machine (used by the first-launch screen). */
+function detectInstalledClis() {
+  const { execFile } = require('child_process');
+  const isWin = os.platform() === 'win32';
+  const env = { ...process.env, PATH: buildEnrichedPath(), Path: buildEnrichedPath() };
+  const entries = Object.entries(AGENT_CLI_SPECS).filter(([, spec]) => spec.binary);
+  return Promise.all(
+    entries.map(
+      ([id, spec]) =>
+        new Promise((resolve) => {
+          const cmd = isWin ? 'where.exe' : 'which';
+          execFile(cmd, [spec.binary], { env, windowsHide: true, timeout: 5000 }, (err, stdout) => {
+            const found = !err && String(stdout).trim().length > 0;
+            resolve({
+              id,
+              binary: spec.binary,
+              title: spec.title,
+              installHint: spec.installHint,
+              installed: found,
+              path: found ? String(stdout).split(/\r?\n/)[0].trim() : null,
+            });
+          });
+        })
+    )
+  );
+}
+
+module.exports = { PtyManager, detectInstalledClis };

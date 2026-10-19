@@ -17,6 +17,7 @@ import {
   countConfiguredKeys,
   loadUserWebApiKeys,
 } from '../services/webAiClient';
+import { buildIssueUrl } from '../config';
 
 interface SupportModalProps {
   isOpen: boolean;
@@ -27,7 +28,6 @@ interface SupportModalProps {
   onOpenAiHelp: () => void;
 }
 
-const SUPPORT_EMAIL = 'louisvarlet76.2003@gmail.com';
 const DISCORD_WEBHOOK_STORAGE_KEY = 'agent-canvas:support-webhook:v1';
 
 const ISSUE_CATEGORIES = [
@@ -57,7 +57,7 @@ const ISSUE_CATEGORIES = [
   },
   {
     id: 'other',
-    label: '💬 Autre question / Idée d’amélioration pour Louis',
+    label: '💬 Autre question / Idée d’amélioration',
     autoAdvice:
       'Décris ton problème ou ton idée ci-dessous, le rapport technique sera joint automatiquement pour que je puisse régler ça rapidement !',
   },
@@ -144,7 +144,7 @@ export const SupportModal: React.FC<SupportModalProps> = ({
     navigator.clipboard.writeText(report);
     setSentStatus('copied');
     setStatusDetail(
-      'Rapport copié ! Tu peux maintenant faire Ctrl+V directement dans ton message Discord / WhatsApp à Louis.'
+      'Rapport copié ! Tu peux maintenant faire Ctrl+V directement dans ton message Discord / WhatsApp.'
     );
   };
 
@@ -154,7 +154,7 @@ export const SupportModal: React.FC<SupportModalProps> = ({
       `[Agent Canvas Support] ${selectedCategoryObj.label} - ${senderName.trim() || 'Pote'}`
     );
     const body = encodeURIComponent(report);
-    window.open(`mailto:${SUPPORT_EMAIL}?subject=${subject}&body=${body}`, '_blank');
+    window.open(buildIssueUrl(decodeURIComponent(subject), decodeURIComponent(body)), '_blank');
   };
 
   const handleDirectSend = async (e: React.FormEvent) => {
@@ -188,39 +188,23 @@ export const SupportModal: React.FC<SupportModalProps> = ({
       } catch (_) {}
     }
 
-    // 2. Send via FormSubmit AJAX directly to Louis's email
+    // 2. Open a prefilled GitHub issue (public tracker of the project, no personal e-mail in the app)
     if (!delivered) {
-      try {
-        const res = await fetch(`https://formsubmit.co/ajax/${SUPPORT_EMAIL}`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Accept: 'application/json',
-          },
-          body: JSON.stringify({
-            _subject: `[Agent Canvas Support] ${selectedCategoryObj.label} (${senderName.trim() || 'Pote'})`,
-            Nom_Pseudo: senderName.trim() || 'Anonyme',
-            Contact: senderContact.trim() || 'Non renseigné',
-            Categorie: selectedCategoryObj.label,
-            Message: message.trim() || '(Voir diagnostic)',
-            Diagnostic: report,
-          }),
-        });
-        if (res.ok) {
-          delivered = true;
-        }
-      } catch (_) {}
+      window.open(
+        buildIssueUrl(`[Support] ${selectedCategoryObj.label}`, report),
+        '_blank'
+      );
     }
 
     setSending(false);
     setSentStatus('sent');
     if (delivered) {
       setStatusDetail(
-        'Ton problème + le diagnostic automatique ont bien été envoyés à Louis ! (Une copie a aussi été mise dans ton presse-papiers si tu veux lui coller sur Discord).'
+        'Ton problème + le diagnostic automatique ont bien été envoyés sur Discord ! (Une copie est aussi dans ton presse-papiers.)'
       );
     } else {
       setStatusDetail(
-        'Le rapport complet a été copié dans ton presse-papiers ! Colle-le (Ctrl+V) à Louis sur Discord ou clique sur "Ouvrir dans mon appli Mail" ci-dessous.'
+        'Une page GitHub s’est ouverte avec ton rapport pré-rempli : il ne reste qu’à cliquer sur « Submit new issue ». (Le rapport est aussi copié dans ton presse-papiers.)'
       );
     }
   };
@@ -236,7 +220,7 @@ export const SupportModal: React.FC<SupportModalProps> = ({
             </div>
             <div>
               <h2 className="text-sm font-bold text-zinc-100">
-                Support & Aide Directe · Envoyer un problème à Louis
+                Support & Aide · Signaler un problème
               </h2>
               <p className="text-[11px] text-zinc-400">
                 Un souci avec une IA ou une clé ? Diagnostic instantané + envoi direct avec les infos techniques.
@@ -470,7 +454,7 @@ export const SupportModal: React.FC<SupportModalProps> = ({
                 className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#14121a] hover:bg-zinc-800 text-zinc-300 border border-[#2d2a37] text-xs font-medium transition-colors"
               >
                 <Mail className="w-3.5 h-3.5 text-sky-400" />
-                <span>Ouvrir dans Mail</span>
+                <span>Ouvrir un ticket GitHub</span>
               </button>
             </div>
 
@@ -484,8 +468,8 @@ export const SupportModal: React.FC<SupportModalProps> = ({
                 {sending
                   ? 'Envoi en cours...'
                   : sentStatus === 'sent'
-                  ? 'Envoyé à Louis ✓'
-                  : 'Envoyer le problème à Louis'}
+                  ? 'Envoyé ✓'
+                  : 'Signaler le problème'}
               </span>
             </button>
           </div>

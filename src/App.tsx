@@ -52,6 +52,7 @@ import { WorkspaceNode, WorkspaceNodeData } from './components/WorkspaceNode';
 import { TriggerNode, TriggerNodeData } from './components/TriggerNode';
 import { AnimatedCableEdge } from './components/AnimatedCableEdge';
 import { FloatingDock } from './components/FloatingDock';
+import { OnboardingModal, isOnboardingDone } from './components/OnboardingModal';
 import { ApiKeysModal } from './components/ApiKeysModal';
 import { AiHelpModal } from './components/AiHelpModal';
 import { SupportModal } from './components/SupportModal';
@@ -1873,7 +1874,7 @@ export default function App() {
               teamId: item.teamId,
               teamLabel: 'TEAM',
               members: [],
-              collabMode: 'split',
+              collabMode: item.collabMode || 'split',
               onChangeCollabMode: handleChangeCollabMode,
               onTriggerTeamRelay: handleTriggerTeamRelay,
               onSynthesizeTeamWork: handleSynthesizeTeamWork,
@@ -2318,12 +2319,26 @@ export default function App() {
   );
 
   // Spawn Git Workspace Node (Pillar 2)
+  /** First free spot to the right of everything already on the canvas (new panels used to cover teams). */
+  const findFreeSpot = useCallback((nds: Node[]) => {
+    const topLevel = nds.filter((n) => !n.parentId);
+    if (topLevel.length === 0) return { x: 120, y: 120 };
+    let maxRight = -Infinity;
+    let minTop = Infinity;
+    for (const n of topLevel) {
+      const { width } = getNodeDimensions(n, DEFAULT_WIDTH, DEFAULT_HEIGHT);
+      maxRight = Math.max(maxRight, n.position.x + width);
+      minTop = Math.min(minTop, n.position.y);
+    }
+    return { x: Math.round(maxRight + 60), y: Math.round(minTop) };
+  }, []);
+
   const handleSpawnWorkspace = useCallback(() => {
     const id = `workspace-${Date.now()}`;
     const newNode: Node = {
       id,
       type: 'workspaceNode',
-      position: { x: 380, y: 120 },
+      position: { x: 0, y: 0 },
       width: 440,
       height: 480,
       data: {
@@ -2333,9 +2348,9 @@ export default function App() {
         modifiedFiles: [],
       },
     };
-    setNodes((nds) => [...nds, newNode]);
+    setNodes((nds) => [...nds, { ...newNode, position: findFreeSpot(nds) }]);
     playCanvasSound('success');
-  }, [setNodes]);
+  }, [setNodes, findFreeSpot]);
 
   // Spawn Pipeline Trigger Node (Pillar 3)
   const handleSpawnTrigger = useCallback(() => {
@@ -2343,7 +2358,7 @@ export default function App() {
     const newNode: Node = {
       id,
       type: 'triggerNode',
-      position: { x: 380, y: 160 },
+      position: { x: 0, y: 0 },
       width: 380,
       height: 380,
       data: {
@@ -2354,9 +2369,9 @@ export default function App() {
         triggerPrompt: 'Vérifie les tests, le typage TypeScript et le statut git.',
       },
     };
-    setNodes((nds) => [...nds, newNode]);
+    setNodes((nds) => [...nds, { ...newNode, position: findFreeSpot(nds) }]);
     playCanvasSound('success');
-  }, [setNodes]);
+  }, [setNodes, findFreeSpot]);
 
   // Global Cross-Terminal Search Jump to Node (Pillar 4)
   const handleFocusNode = useCallback(
@@ -2634,6 +2649,7 @@ export default function App() {
             position: { x: Math.round(n.position.x), y: Math.round(n.position.y) },
             label: od.label,
             teamId: od.teamId,
+            collabMode: od.collabMode,
           };
         }
 
@@ -3148,6 +3164,16 @@ export default function App() {
 
   // Clear all consoles & teams
   const handleClearAll = useCallback(async () => {
+    // One click used to wipe the whole canvas irreversibly: always ask first.
+    const consoleCount = nodes.filter((n) => n.type === 'consoleNode').length;
+    if (
+      nodes.length > 0 &&
+      !window.confirm(
+        `Tout effacer ? ${consoleCount} console(s), les équipes et les panneaux seront supprimés et les IA arrêtées.\n\n(Une copie de secours du canvas précédent est gardée.)`
+      )
+    ) {
+      return;
+    }
     activeWorkflowsRef.current = {};
     for (const n of nodes) {
       if (n.type === 'consoleNode') {
@@ -3261,9 +3287,15 @@ export default function App() {
 
   const [showQuotaModal, setShowQuotaModal] = useState(false);
   const [showApiKeysModal, setShowApiKeysModal] = useState(false);
-  const [showTutorialModal, setShowTutorialModal] = useState(
-    () => !localStorage.getItem(TUTORIAL_SEEN_KEY)
+  // Desktop first launch: the onboarding (installed AIs, costs, safety) comes before the tutorial.
+  const [showOnboarding, setShowOnboarding] = useState(
+    () => Boolean(window.agentCanvasAPI) && !isOnboardingDone()
   );
+  const [showTutorialModal, setShowTutorialModal] = useState(
+    () => !localStorage.getItem(TUTORIAL_SEEN_KEY) && !(Boolean(window.agentCanvasAPI) && !isOnboardingDone())
+  );
+  const [appUpdate, setAppUpdate] = useState<{ state: 'downloading' | 'ready'; version?: string } | null>(null);
+  useEffect(() => window.agentCanvasAPI?.onAppUpdate?.((payload) => setAppUpdate(payload)), []);
   const [showAiHelpModal, setShowAiHelpModal] = useState(false);
   const [aiHelpTarget, setAiHelpTarget] = useState<{
     agent: AgentCommandType;
@@ -3709,7 +3741,7 @@ export default function App() {
         </div>
 
         {/* Help, Tutorial, Support, Install App, API Keys + Zoom Controls Pill */}
-        <div className="pointer-events-auto flex items-center gap-2 flex-wrap justify-end">
+        <div className="pointer-events-none flex items-center gap-2 flex-wrap justify-end *:pointer-events-auto">
           {/* Restart & Update Button: visible ONLY when an update is available */}
           {hasUpdate && (
             <button
@@ -3733,6 +3765,35 @@ export default function App() {
             >
               <Download className="w-3.5 h-3.5" />
               <span>Installer l’App</span>
+            </button>
+          )}
+
+          {/* Installed app: a new version was downloaded from GitHub */}
+          {appUpdate && (
+            <button
+              type="button"
+              onClick={() => appUpdate.state === 'ready' && window.agentCanvasAPI?.installUpdate?.()}
+              disabled={appUpdate.state !== 'ready'}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-2xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/40 shadow-card text-xs text-emerald-200 transition-colors disabled:cursor-default"
+              title={appUpdate.state === 'ready' ? 'Redémarrer Agent Canvas pour installer la nouvelle version' : 'Téléchargement en cours'}
+            >
+              <span className="font-semibold">
+                {appUpdate.state === 'ready'
+                  ? `Mise à jour ${appUpdate.version ? `v${appUpdate.version} ` : ''}prête · Redémarrer`
+                  : 'Téléchargement de la mise à jour…'}
+              </span>
+            </button>
+          )}
+
+          {/* First-launch checklist (installed AIs, costs, safety) */}
+          {Boolean(window.agentCanvasAPI) && (
+            <button
+              type="button"
+              onClick={() => setShowOnboarding(true)}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-2xl bg-[#1c1a22]/90 hover:bg-[#24212c] backdrop-blur-xl border border-[#2d2a37] shadow-card text-xs text-zinc-200 transition-colors cursor-pointer"
+              title="Voir quelles IA sont installées sur ce PC, les coûts et les règles de sécurité"
+            >
+              <span className="font-semibold">Mes IA</span>
             </button>
           )}
 
@@ -3803,7 +3864,7 @@ export default function App() {
             </span>
           </button>
 
-          {/* Direct Support Button (Send problem to Louis) */}
+          {/* Direct Support Button (report a problem) */}
           <button
             type="button"
             onClick={() => {
@@ -3811,7 +3872,7 @@ export default function App() {
               setShowSupportModal(true);
             }}
             className="flex items-center gap-1.5 px-3 py-2 rounded-2xl bg-[#1c1a22]/90 hover:bg-[#24212c] backdrop-blur-xl border border-emerald-500/40 shadow-card text-xs text-emerald-300 transition-colors cursor-pointer"
-            title="Un problème ? Envoyer directement à Louis pour qu'il le règle"
+            title="Un problème ? Signaler-le (ticket GitHub pré-rempli)"
           >
             <LifeBuoy className="w-3.5 h-3.5 text-emerald-400" />
             <span className="font-semibold">Support</span>
@@ -3955,6 +4016,14 @@ export default function App() {
       />
 
       {/* Interactive Beginner Tutorial Modal */}
+      <OnboardingModal
+        isOpen={showOnboarding}
+        onClose={() => {
+          setShowOnboarding(false);
+          if (!localStorage.getItem(TUTORIAL_SEEN_KEY)) setShowTutorialModal(true);
+        }}
+      />
+
       <InteractiveTutorialModal
         isOpen={showTutorialModal}
         onClose={() => setShowTutorialModal(false)}
@@ -3988,7 +4057,7 @@ export default function App() {
         onOpenTutorial={() => setShowTutorialModal(true)}
       />
 
-      {/* Support Modal to Send Problem Directly to Louis */}
+      {/* Support Modal to Report a problem */}
       <SupportModal
         isOpen={showSupportModal}
         prefillSubject={supportPrefillSubject}

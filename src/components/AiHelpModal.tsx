@@ -465,7 +465,7 @@ export const AiHelpModal: React.FC<AiHelpModalProps> = ({
                 className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/40 text-xs font-semibold shrink-0 transition-colors"
               >
                 <LifeBuoy className="w-4 h-4" />
-                <span>Ça bloque ? Envoyer à Louis</span>
+                <span>Ça bloque ? Signaler le problème</span>
               </button>
             </div>
           </div>

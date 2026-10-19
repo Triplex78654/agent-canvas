@@ -23,6 +23,7 @@ export function getCurrentVersionInfo(): AppVersionInfo {
  * Initializes the current loaded version on app mount, then checks for updates
  */
 export async function initializeVersionTracker(): Promise<AppVersionInfo | null> {
+  if (typeof window !== 'undefined' && window.location.protocol === 'file:') return null;
   try {
     const res = await fetch(`/version.json?_init=${Date.now()}`, {
       cache: 'no-store',
@@ -54,6 +55,10 @@ export async function checkForAppUpdate(): Promise<{
   remoteBuildTime?: number;
   remoteInfo?: AppVersionInfo;
 }> {
+  // Installed desktop app (file://): updates come from GitHub releases via electron-updater instead.
+  if (typeof window !== 'undefined' && window.location.protocol === 'file:') {
+    return { hasUpdate: false, currentBuildTime: currentVersionInfo.buildTime };
+  }
   try {
     const res = await fetch(`/version.json?_t=${Date.now()}`, {
       cache: 'no-store',

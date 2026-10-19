@@ -13,6 +13,14 @@ contextBridge.exposeInMainWorld('agentCanvasAPI', {
   getStoragePath: () => ipcRenderer.invoke('storage:getPath'),
   getGitStatus: (projectPath) => ipcRenderer.invoke('git:status', projectPath),
   pickFolder: () => ipcRenderer.invoke('dialog:pickFolder'),
+  detectClis: () => ipcRenderer.invoke('cli:detect'),
+  getAppInfo: () => ipcRenderer.invoke('app:info'),
+  installUpdate: () => ipcRenderer.invoke('app:installUpdate'),
+  onAppUpdate: (callback) => {
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on('app:update', listener);
+    return () => ipcRenderer.removeListener('app:update', listener);
+  },
 
   onPtyData: (callback) => {
     const listener = (_event, payload) => callback(payload);

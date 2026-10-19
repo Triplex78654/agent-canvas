@@ -4,7 +4,7 @@ const path = require('path');
 const os = require('os');
 const { fileURLToPath } = require('url');
 const fs = require('fs');
-const { PtyManager } = require('./ptyManager.cjs');
+const { PtyManager, detectInstalledClis } = require('./ptyManager.cjs');
 
 const ISOLATED_TEST_MODE = process.argv.includes('--visual-test') || process.argv.includes('--smoke-test');
 const TEST_DATA_DIR = path.join(os.tmpdir(), `agent-canvas-test-${process.pid}`);
@@ -94,6 +94,17 @@ function savePersistedState(state) {
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }
+    // Safety net: keep a copy of the last non-empty canvas before it gets overwritten by an empty one
+    // (e.g. "clear all" by mistake). It can be restored by renaming canvas-state.backup.json.
+    try {
+      const nextCount = Array.isArray(state?.nodes) ? state.nodes.length : 0;
+      if (nextCount === 0 && fs.existsSync(filePath)) {
+        const previous = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+        if (Array.isArray(previous?.nodes) && previous.nodes.length > 0) {
+          fs.copyFileSync(filePath, path.join(dir, 'canvas-state.backup.json'));
+        }
+      }
+    } catch (_) {}
     const tempPath = `${filePath}.tmp`;
     fs.writeFileSync(tempPath, JSON.stringify(state, null, 2), 'utf-8');
     fs.renameSync(tempPath, filePath);
@@ -112,7 +123,9 @@ function createWindow() {
     minHeight: 640,
     backgroundColor: '#14121a',
     title: 'Agent Canvas',
-    icon: path.join(__dirname, '../public/icon.ico'),
+    // Shown once the interface is painted (no empty dark window during startup).
+    show: false,
+    icon: path.join(__dirname, app.isPackaged ? '../dist/icon.ico' : '../public/icon.ico'),
     autoHideMenuBar: true,
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
     webPreferences: {
@@ -127,9 +140,18 @@ function createWindow() {
     },
   });
 
+  mainWindow.once('ready-to-show', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.show();
+  });
+  // Safety net: never stay invisible if the page is slow or fails to load.
+  setTimeout(() => {
+    if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.isVisible()) mainWindow.show();
+  }, 8000);
+
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    // Let the Support "mailto:" button open the system mail client; everything else stays blocked.
-    if (typeof url === 'string' && url.startsWith('mailto:')) {
+    // Links (support ticket on GitHub, "get an API key" pages, mailto) open in the user's own browser/mail app;
+    // no new Electron window is ever created.
+    if (typeof url === 'string' && /^(https:|mailto:)/i.test(url)) {
       shell.openExternal(url).catch(() => {});
     }
     return { action: 'deny' };
@@ -431,6 +453,21 @@ ipcMain.handle('git:status', async (event, projectPath) => {
   };
 });
 
+ipcMain.handle('cli:detect', async (event) => {
+  if (!isTrustedIpc(event)) return [];
+  try {
+    return await detectInstalledClis();
+  } catch (err) {
+    console.warn('[CLI detect] failed:', err.message);
+    return [];
+  }
+});
+
+ipcMain.handle('app:info', (event) => {
+  if (!isTrustedIpc(event)) return null;
+  return { version: app.getVersion(), packaged: app.isPackaged, platform: process.platform };
+});
+
 ipcMain.handle('dialog:pickFolder', async (event) => {
   if (!isTrustedIpc(event) || !mainWindow) return null;
   const result = await dialog.showOpenDialog(mainWindow, {
@@ -446,8 +483,40 @@ ipcMain.handle('storage:getPath', (event) => {
   return getStateFilePath();
 });
 
+/**
+ * Auto-update (installed app only): checks the GitHub releases of the project, downloads in the background
+ * and installs the new version the next time the app is closed. Never runs in dev mode.
+ */
+function setupAutoUpdates() {
+  if (!app.isPackaged || ISOLATED_TEST_MODE) return;
+  let autoUpdater;
+  try {
+    ({ autoUpdater } = require('electron-updater'));
+  } catch (err) {
+    console.warn('[Updater] electron-updater unavailable:', err.message);
+    return;
+  }
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
+  const notify = (payload) => {
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('app:update', payload);
+  };
+  autoUpdater.on('update-available', (info) => notify({ state: 'downloading', version: info?.version }));
+  autoUpdater.on('update-downloaded', (info) => notify({ state: 'ready', version: info?.version }));
+  autoUpdater.on('error', (err) => console.warn('[Updater]', err?.message || err));
+  const check = () => autoUpdater.checkForUpdates().catch((err) => console.warn('[Updater] check failed:', err?.message || err));
+  setTimeout(check, 10_000);
+  setInterval(check, 6 * 60 * 60 * 1000);
+  ipcMain.handle('app:installUpdate', (event) => {
+    if (!isTrustedIpc(event)) return false;
+    setImmediate(() => autoUpdater.quitAndInstall());
+    return true;
+  });
+}
+
 app.whenReady().then(() => {
   createWindow();
+  setupAutoUpdates();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

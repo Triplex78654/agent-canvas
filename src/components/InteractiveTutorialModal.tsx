@@ -106,7 +106,7 @@ export const InteractiveTutorialModal: React.FC<InteractiveTutorialModalProps> =
       id: 'support',
       badge: 'Étape 7 / 7',
       title: 'Tu es prêt ! (Et le bouton Support si ça bloque) 🛟',
-      subtitle: 'Un problème ? Envoie-le en 1 clic à Louis directement depuis le site.',
+      subtitle: 'Un problème ? Signale-le en 1 clic depuis l’app.',
       icon: <LifeBuoy className="w-5 h-5 text-emerald-400" />,
     },
   ];
@@ -532,7 +532,7 @@ export const InteractiveTutorialModal: React.FC<InteractiveTutorialModalProps> =
                       Un bug, une erreur ou une question ? Le bouton "🛟 Support" est là !
                     </h4>
                     <p className="text-[11px] text-emerald-200">
-                      Tu peux envoyer ton problème directement à Louis en 1 clic.
+                      Tu peux signaler ton problème en 1 clic.
                     </p>
                   </div>
                 </div>
@@ -548,7 +548,7 @@ export const InteractiveTutorialModal: React.FC<InteractiveTutorialModalProps> =
                     ❓ <strong>Aide IA :</strong> Pour voir les commandes et explications de chaque IA (aussi disponible via le bouton <code>?</code> sur chaque console).
                   </li>
                   <li>
-                    🛟 <strong>Support :</strong> Envoie automatiquement le diagnostic de ton problème à Louis (ou copie le rapport pour lui coller sur Discord/WhatsApp) pour qu’il te le règle tout de suite !
+                    🛟 <strong>Support :</strong> Joint automatiquement le diagnostic de ton problème (ou copie le rapport pour lui coller sur Discord/WhatsApp) pour qu’il te le règle tout de suite !
                   </li>
                 </ul>
 
