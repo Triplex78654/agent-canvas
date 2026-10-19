@@ -1,6 +1,6 @@
 {
   "name": "agent-canvas",
-  "version": "1.4.2",
+  "version": "1.4.3",
   "private": true,
   "description": "Agent Canvas - Canvas infini pour piloter plusieurs IA en ligne de commande (Claude Code, Codex, Gemini CLI, Antigravity, Ollama…)",
   "main": "electron/main.cjs",
