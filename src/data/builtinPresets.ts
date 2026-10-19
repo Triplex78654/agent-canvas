@@ -1,0 +1,237 @@
+import type { CanvasPreset } from '../types';
+import {
+  DEFAULT_HEIGHT,
+  DEFAULT_WIDTH,
+  TEAM_GAP_X,
+  TEAM_GAP_Y,
+  TEAM_PADDING_TOP,
+  TEAM_PADDING_X,
+} from '../lib/canvasLayout';
+
+export const BUILTIN_PRESETS: CanvasPreset[] = [
+  {
+    id: 'preset-team-duo',
+    name: 'Squad Duo + Orchestrateur',
+    description: '1 équipe active (Claude Architect + Qwen3 Coder) pilotée par un Orchestrateur.',
+    builtIn: true,
+    createdAt: '2026-10-17T12:00:00Z',
+    nodes: [
+      {
+        id: 'team-1',
+        type: 'teamNode',
+        position: { x: 375, y: 70 },
+        width: 1048,
+        height: 432,
+        label: 'TEAM 1',
+        teamNumber: 1,
+      },
+      {
+        id: 'orch-team-1',
+        type: 'orchestratorNode',
+        position: { x: 24, y: 95 },
+        label: 'Orchestrateur 1',
+        teamId: 'team-1',
+      },
+      {
+        id: 'console-1',
+        type: 'consoleNode',
+        parentId: 'team-1',
+        position: { x: TEAM_PADDING_X, y: TEAM_PADDING_TOP },
+        width: DEFAULT_WIDTH,
+        height: DEFAULT_HEIGHT,
+        label: 'Claude Architect',
+        commandType: 'claude',
+      },
+      {
+        id: 'console-2',
+        type: 'consoleNode',
+        parentId: 'team-1',
+        position: {
+          x: TEAM_PADDING_X + DEFAULT_WIDTH + TEAM_GAP_X,
+          y: TEAM_PADDING_TOP,
+        },
+        width: DEFAULT_WIDTH,
+        height: DEFAULT_HEIGHT,
+        label: 'Qwen3 Coder',
+        commandType: 'qwen',
+      },
+    ],
+    edges: [
+      {
+        id: 'cable-orch-team-1-team-1',
+        source: 'orch-team-1',
+        target: 'team-1',
+        type: 'animatedCable',
+      },
+    ],
+  },
+  {
+    id: 'preset-quad-grid',
+    name: 'Quad Multi-Agent Team (4x)',
+    description: 'Équipe complète 2×2 : Claude, Codex, Gemini et System Shell reliés à un Orchestrateur.',
+    builtIn: true,
+    createdAt: '2026-10-17T12:00:00Z',
+    nodes: [
+      {
+        id: 'team-quad',
+        type: 'teamNode',
+        position: { x: 375, y: 50 },
+        width: 1048,
+        height: 796,
+        label: 'TEAM FULLSTACK',
+        teamNumber: 1,
+      },
+      {
+        id: 'orch-team-quad',
+        type: 'orchestratorNode',
+        position: { x: 24, y: 120 },
+        label: 'Orchestrateur Fullstack',
+        teamId: 'team-quad',
+      },
+      {
+        id: 'c-quad-1',
+        type: 'consoleNode',
+        parentId: 'team-quad',
+        position: { x: TEAM_PADDING_X, y: TEAM_PADDING_TOP },
+        width: DEFAULT_WIDTH,
+        height: DEFAULT_HEIGHT,
+        label: 'Claude Lead',
+        commandType: 'claude',
+      },
+      {
+        id: 'c-quad-2',
+        type: 'consoleNode',
+        parentId: 'team-quad',
+        position: {
+          x: TEAM_PADDING_X + DEFAULT_WIDTH + TEAM_GAP_X,
+          y: TEAM_PADDING_TOP,
+        },
+        width: DEFAULT_WIDTH,
+        height: DEFAULT_HEIGHT,
+        label: 'Codex Engine',
+        commandType: 'codex',
+      },
+      {
+        id: 'c-quad-3',
+        type: 'consoleNode',
+        parentId: 'team-quad',
+        position: {
+          x: TEAM_PADDING_X,
+          y: TEAM_PADDING_TOP + DEFAULT_HEIGHT + TEAM_GAP_Y,
+        },
+        width: DEFAULT_WIDTH,
+        height: DEFAULT_HEIGHT,
+        label: 'Gemini Reviewer',
+        commandType: 'gemini',
+      },
+      {
+        id: 'c-quad-4',
+        type: 'consoleNode',
+        parentId: 'team-quad',
+        position: {
+          x: TEAM_PADDING_X + DEFAULT_WIDTH + TEAM_GAP_X,
+          y: TEAM_PADDING_TOP + DEFAULT_HEIGHT + TEAM_GAP_Y,
+        },
+        width: DEFAULT_WIDTH,
+        height: DEFAULT_HEIGHT,
+        label: 'Test Runner Shell',
+        commandType: 'shell',
+      },
+    ],
+    edges: [
+      {
+        id: 'cable-orch-quad',
+        source: 'orch-team-quad',
+        target: 'team-quad',
+        type: 'animatedCable',
+      },
+    ],
+  },
+  {
+    id: 'preset-free-squad',
+    name: 'Free AI Squad (Qwen · Ollama · Kimi · DeepSeek)',
+    description: 'Équipe 100% Modèles Gratuits & Locaux : Qwen3 Coder, Ollama Local, Kimi K2 et DeepSeek R1.',
+    builtIn: true,
+    createdAt: '2026-10-17T12:00:00Z',
+    nodes: [
+      {
+        id: 'team-free',
+        type: 'teamNode',
+        position: { x: 375, y: 50 },
+        width: 1048,
+        height: 796,
+        label: 'FREE AI SQUAD',
+        teamNumber: 1,
+      },
+      {
+        id: 'orch-team-free',
+        type: 'orchestratorNode',
+        position: { x: 24, y: 120 },
+        label: 'Orchestrateur Free AI',
+        teamId: 'team-free',
+      },
+      {
+        id: 'c-free-1',
+        type: 'consoleNode',
+        parentId: 'team-free',
+        position: { x: TEAM_PADDING_X, y: TEAM_PADDING_TOP },
+        width: DEFAULT_WIDTH,
+        height: DEFAULT_HEIGHT,
+        label: 'Qwen3 Coder',
+        commandType: 'qwen',
+      },
+      {
+        id: 'c-free-2',
+        type: 'consoleNode',
+        parentId: 'team-free',
+        position: {
+          x: TEAM_PADDING_X + DEFAULT_WIDTH + TEAM_GAP_X,
+          y: TEAM_PADDING_TOP,
+        },
+        width: DEFAULT_WIDTH,
+        height: DEFAULT_HEIGHT,
+        label: 'Ollama Qwen2.5',
+        commandType: 'ollama',
+      },
+      {
+        id: 'c-free-3',
+        type: 'consoleNode',
+        parentId: 'team-free',
+        position: {
+          x: TEAM_PADDING_X,
+          y: TEAM_PADDING_TOP + DEFAULT_HEIGHT + TEAM_GAP_Y,
+        },
+        width: DEFAULT_WIDTH,
+        height: DEFAULT_HEIGHT,
+        label: 'Kimi K2 Agent',
+        commandType: 'kimi',
+      },
+      {
+        id: 'c-free-4',
+        type: 'consoleNode',
+        parentId: 'team-free',
+        position: {
+          x: TEAM_PADDING_X + DEFAULT_WIDTH + TEAM_GAP_X,
+          y: TEAM_PADDING_TOP + DEFAULT_HEIGHT + TEAM_GAP_Y,
+        },
+        width: DEFAULT_WIDTH,
+        height: DEFAULT_HEIGHT,
+        label: 'DeepSeek R1 Local',
+        commandType: 'deepseek',
+      },
+    ],
+    edges: [
+      {
+        id: 'cable-orch-free',
+        source: 'orch-team-free',
+        target: 'team-free',
+        type: 'animatedCable',
+      },
+    ],
+  },
+];
+
+export const DEFAULT_MEMORY_NOTES = `# Contexte Partagé · Agent Canvas
+- Stack : Electron + React + TypeScript + Tailwind + @xyflow/react + xterm.js
+- Conventions : Code modulaire, typage strict, pas d'effets de bord non contrôlés.
+- Astuce : Utilisez le bouton "Injecter dans le prompt" pour transférer ces notes dans la barre @.`;

@@ -130,18 +130,18 @@ export const AI_HELP_CATALOG: Record<AgentCommandType, AiGuideEntry> = {
   gemini: {
     id: 'gemini',
     name: 'Gemini CLI (Google)',
-    tagline: 'L’IA de Google avec un gros quota gratuit chaque jour',
+    tagline: 'L’IA de Google en terminal, avec ta clé API Google',
     beginnerSummary:
-      'C’est le meilleur choix pour débuter gratuitement sur le Web ! Google offre une clé API gratuite (via Google AI Studio) et jusqu’à 1 000 requêtes gratuites par jour avec Gemini CLI.',
+      'Sur le Web, tu peux utiliser une clé Google AI Studio. Sur PC, Gemini CLI demande maintenant une clé API : depuis juin 2026, Google a fermé la connexion gratuite « Sign in with Google » et renvoie vers Antigravity (agy).',
     bestFor: [
       'Débuter sans rien payer (0 €)',
       'Poser des questions longues (grande mémoire)',
       'Analyser du texte, du code ou des idées',
     ],
     difficulty: 'Très Facile',
-    costSummary: '100 % Gratuit avec un simple compte Google (Google AI Studio ou connexion Google).',
+    costSummary: 'Selon ta clé API : gratuit tant que ton projet AI Studio a du quota gratuit, sinon facturé (crédits prépayés). Erreur 402 = plus de crédits.',
     freeKeyUrl: 'https://aistudio.google.com/app/apikey',
-    freeKeyLabel: 'Créer ma clé Gemini Gratuite (30 sec)',
+    freeKeyLabel: 'Créer ma clé Gemini (Google AI Studio)',
     webSetupSteps: [
       'Va sur aistudio.google.com/app/apikey avec ton compte Google.',
       'Clique sur "Create API Key" et copie la clé qui commence par `AIza...`.',
@@ -149,7 +149,8 @@ export const AI_HELP_CATALOG: Record<AgentCommandType, AiGuideEntry> = {
     ],
     desktopSetupSteps: [
       'Installe Gemini CLI sur ton PC avec : `npm install -g @google/gemini-cli`',
-      'Lance la console et choisis "Login with Google" pour profiter des 1 000 requêtes/jour gratuites.',
+      'Lance la console et choisis « Use Gemini API Key », puis colle ta clé (aistudio.google.com/app/apikey).',
+      'Message « This client is no longer supported » ou erreur 402 : la connexion Google gratuite n’existe plus ou ton projet n’a plus de crédits. Utilise Antigravity (agy) à la place.',
     ],
     commands: [
       {

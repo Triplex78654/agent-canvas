@@ -1,6 +1,6 @@
 {
   "name": "agent-canvas",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "private": true,
   "description": "Agent Canvas - Canvas infini pour piloter plusieurs IA en ligne de commande (Claude Code, Codex, Gemini CLI, Antigravity, Ollama…)",
   "main": "electron/main.cjs",
@@ -9,6 +9,7 @@
     "dev:electron": "wait-on tcp:5173 && electron .",
     "dev": "concurrently -k \"npm:dev:vite\" \"npm:dev:electron\"",
     "build": "node scripts/generate-version.cjs && tsc -b && vite build",
+    "test": "vitest run",
     "preview:web": "npm run build && vite preview --port 4173",
     "deploy:cloudflare": "npm run build && npx wrangler pages deploy dist --project-name agent-canvas --branch main --commit-dirty=true",
     "dist:win": "npm run build && electron-builder --win nsis --publish never",
@@ -18,10 +19,10 @@
     "@xterm/addon-fit": "^0.10.0",
     "@xterm/xterm": "^5.5.0",
     "@xyflow/react": "^12.4.2",
+    "electron-updater": "^6.8.9",
     "lucide-react": "^0.475.0",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "electron-updater": "^6.8.9"
+    "react-dom": "^18.3.1"
   },
   "optionalDependencies": {
     "node-pty": "^1.1.0-beta33"
@@ -34,12 +35,13 @@
     "@vitejs/plugin-react": "^4.3.4",
     "concurrently": "^9.1.2",
     "electron": "^44.9.0",
+    "electron-builder": "^26.15.3",
     "postcss": "^8.5.1",
     "tailwindcss": "^4.3.3",
     "typescript": "~5.7.2",
     "vite": "^6.1.0",
-    "wait-on": "^8.0.2",
-    "electron-builder": "^26.15.3"
+    "vitest": "^3.2.7",
+    "wait-on": "^8.0.2"
   },
   "author": "Triplex78654",
   "license": "MIT",

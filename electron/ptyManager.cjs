@@ -67,7 +67,7 @@ const AGENT_CLI_SPECS = {
     binary: 'gemini',
     cmd: 'gemini',
     installHint: 'npm install -g @google/gemini-cli',
-    title: 'Google Gemini CLI (Free Tier disponible)',
+    title: 'Google Gemini CLI (clé API requise)',
   },
   qwen: {
     binary: 'qwen',
@@ -134,9 +134,14 @@ function buildSmartStartupCommand(commandType, customCommand) {
 }
 
 class PtyManager {
-  constructor(sendToRenderer) {
+  /**
+   * @param sendToRenderer (channel, payload) => void
+   * @param options.ptyBackend replaces node-pty (tests pass a fake terminal; null forces the fallback shell)
+   */
+  constructor(sendToRenderer, options = {}) {
     this.sessions = new Map();
     this.sendToRenderer = sendToRenderer;
+    this.pty = options.ptyBackend !== undefined ? options.ptyBackend : nodePty;
   }
 
   setStatus(id, status) {
@@ -199,9 +204,9 @@ class PtyManager {
       FORCE_COLOR: '3',
     };
 
-    if (nodePty) {
+    if (this.pty) {
       try {
-        const ptyProcess = nodePty.spawn(shell, args, {
+        const ptyProcess = this.pty.spawn(shell, args, {
           name: 'xterm-256color',
           cols,
           rows,
@@ -502,4 +507,4 @@ function detectInstalledClis() {
   );
 }
 
-module.exports = { PtyManager, detectInstalledClis };
+module.exports = { PtyManager, detectInstalledClis, resolveWorkingDirectory, buildSmartStartupCommand };

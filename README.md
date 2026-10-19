@@ -56,14 +56,17 @@ Bouton **Support** dans l'app : il ouvre un [ticket GitHub](https://github.com/T
 npm install
 npm run dev          # Vite + Electron en mode développement
 npm run build        # vérification TypeScript + build de l'interface
+npm test             # tests automatiques (Vitest)
 npm run dist:win     # crée l'installateur dans release/
 ```
 
 ### Publier une nouvelle version
 
 1. **Une seule fois** : double-clique sur `connexion-github.bat` (installe GitHub CLI si besoin et connecte ce PC à ton compte GitHub).
-2. **À chaque version** : double-clique sur `publier.bat`. Il augmente le numéro de version, fabrique l'installateur, enregistre le code sur GitHub et met la release en ligne (avec `latest.yml`).
+2. **À chaque version** : double-clique sur `publier.bat`. Il lance les tests (et s'arrête si l'un échoue), augmente le numéro de version, fabrique l'installateur, enregistre le code sur GitHub et met la release en ligne (avec `latest.yml`).
 3. Les utilisateurs reçoivent la nouvelle version tout seuls (vérification au démarrage, toutes les 6 h, ou via le bouton **Mises à jour** de l'app).
+
+Organisation du code : `src/App.tsx` (canvas), `src/hooks/` (actions d'équipe, sauvegarde auto), `src/lib/` (fonctions pures testées : texte des terminaux, mise en page, sauvegarde, quotas), `src/components/`, `electron/` (fenêtre, terminaux, mises à jour), `tests/`.
 
 Stack : Electron, React, TypeScript, Vite, Tailwind, React Flow (`@xyflow/react`), xterm.js, node-pty.
 

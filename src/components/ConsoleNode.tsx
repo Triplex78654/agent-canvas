@@ -8,23 +8,12 @@ import {
   Pause,
   Pencil,
   X,
-  Terminal as TerminalIcon,
-  Sparkles,
-  Code2,
-  Cpu,
   RotateCcw,
   Check,
   ShieldCheck,
-  Bot,
-  HardDrive,
-  Flame,
-  Brain,
-  Wrench,
-  Globe,
   Gauge,
   AlertTriangle,
   Infinity as InfinityIcon,
-  Minimize2,
   Maximize2,
   HelpCircle,
   Share2,
@@ -48,191 +37,20 @@ import {
   markConsoleStarted,
   recordAgentReply,
 } from '../services/teamCollabBus';
+import { AGY_MODELS, COMMAND_OPTIONS } from '../data/agentCatalog';
+import {
+  BLOCKING_DIALOG_RE,
+  WORKING_RE,
+  cleanReplyText,
+  countLetters,
+  detectCliFailure,
+  sleep,
+  stripAnsi,
+  stripEchoedPrompt,
+} from '../lib/terminalText';
 
-export type PricingTier = 'sub' | 'local-free' | 'freemium' | 'byok' | 'system';
-
-export interface AgentOptionSpec {
-  id: AgentCommandType;
-  label: string;
-  subtitle: string;
-  badge: string;
-  tier: PricingTier;
-  tierLabel: string;
-  costNotice: string;
-  isFree?: boolean;
-  isUnlimitedLocal?: boolean;
-  defaultTokenLimit: number;
-  quotaLabel: string;
-  icon: React.ReactNode;
-}
-
-export const AGY_MODELS = [
-  { id: 'gemini-4-argon-medium', label: 'Argon 4 (Medium)', tag: 'Recommandé' },
-  { id: 'gemini-4-argon-high', label: 'Argon 4 (High)', tag: 'Max Raisonnement' },
-  { id: 'gemini-4-argon-low', label: 'Argon 4 (Low)', tag: 'Rapide' },
-  { id: 'claude-opus-5-5-medium', label: 'Claude Opus 5.5', tag: 'Via Abo Agy' },
-  { id: 'claude-sonnet-5-5-medium', label: 'Claude Sonnet 5.5', tag: 'Via Abo Agy' },
-  { id: 'gemini-3.8-flash-high', label: 'Gemini 3.8 Flash', tag: 'Économique' },
-];
-
-export const COMMAND_OPTIONS: AgentOptionSpec[] = [
-  {
-    id: 'agy',
-    label: 'Antigravity (Argon 4)',
-    subtitle: 'agy --model gemini-4-argon-medium',
-    badge: 'Ton abonnement Antigravity · Argon 4',
-    tier: 'sub',
-    tierLabel: 'ABO PAYANT',
-    costNotice:
-      'Inclus dans ton abonnement Antigravity : consomme ton quota de session (aucune facturation hors-forfait).',
-    isFree: false,
-    defaultTokenLimit: 200000,
-    quotaLabel: 'Abonnement Antigravity · Argon 4 (~200k tok)',
-    icon: <Sparkles className="w-4 h-4 text-amber-400" />,
-  },
-  {
-    id: 'claude',
-    label: 'Claude Code',
-    subtitle: 'claude',
-    badge: 'Abo Claude Pro/Max ou Clé API',
-    tier: 'sub',
-    tierLabel: 'ABO PAYANT',
-    costNotice:
-      'Payant : nécessite un abonnement Claude Pro/Max (quota 5h) ou des crédits API Anthropic.',
-    isFree: false,
-    defaultTokenLimit: 45000,
-    quotaLabel: 'Quota fenêtre 5h (~45k tok)',
-    icon: <Sparkles className="w-4 h-4 text-[#ff6a3d]" />,
-  },
-  {
-    id: 'codex',
-    label: 'Codex CLI',
-    subtitle: 'codex',
-    badge: 'Abo ChatGPT Plus/Pro ou Clé API',
-    tier: 'sub',
-    tierLabel: 'ABO PAYANT',
-    costNotice:
-      'Payant : nécessite un abonnement ChatGPT Plus/Pro ou une clé API OpenAI facturée à l’usage.',
-    isFree: false,
-    defaultTokenLimit: 60000,
-    quotaLabel: 'Quota API / Plus (~60k tok)',
-    icon: <Code2 className="w-4 h-4 text-teal-400" />,
-  },
-  {
-    id: 'ollama',
-    label: 'Ollama (Qwen2.5)',
-    subtitle: 'ollama run qwen2.5-coder',
-    badge: '100% Gratuit · Tourne sur ton PC',
-    tier: 'local-free',
-    tierLabel: '100% GRATUIT (PC)',
-    costNotice:
-      '100 % Gratuit (0 €) : tourne localement sur ton PC hors-ligne. Ne consomme aucun abonnement ni quota.',
-    isFree: true,
-    isUnlimitedLocal: true,
-    defaultTokenLimit: 128000,
-    quotaLabel: 'Local Hors-ligne · Illimité (0€)',
-    icon: <HardDrive className="w-4 h-4 text-emerald-400" />,
-  },
-  {
-    id: 'deepseek',
-    label: 'DeepSeek R1 Local',
-    subtitle: 'ollama run deepseek-r1',
-    badge: '100% Gratuit · Tourne sur ton PC',
-    tier: 'local-free',
-    tierLabel: '100% GRATUIT (PC)',
-    costNotice:
-      '100 % Gratuit (0 €) : tourne localement sur ton PC via Ollama. Aucun compte ni carte bancaire requis.',
-    isFree: true,
-    isUnlimitedLocal: true,
-    defaultTokenLimit: 128000,
-    quotaLabel: 'Local Hors-ligne · Illimité (0€)',
-    icon: <Brain className="w-4 h-4 text-cyan-400" />,
-  },
-  {
-    id: 'gemini',
-    label: 'Gemini CLI',
-    subtitle: 'gemini',
-    badge: 'Quota Google Gratuit (1000 req/j)',
-    tier: 'freemium',
-    tierLabel: 'QUOTA GRATUIT',
-    costNotice:
-      'Gratuit (0 €) si tu choisis "Login with Google" (1 000 req/jour offertes sur Gemini standard, sans Argon 4).',
-    isFree: true,
-    defaultTokenLimit: 150000,
-    quotaLabel: 'Quota Gratuit Google (1000 req/j)',
-    icon: <Cpu className="w-4 h-4 text-sky-400" />,
-  },
-  {
-    id: 'qwen',
-    label: 'Qwen Code CLI',
-    subtitle: 'qwen',
-    badge: 'Outil gratuit · API ou Ollama (OAuth arrêté)',
-    tier: 'byok',
-    tierLabel: 'LOCAL / API',
-    costNotice:
-      'Attention : le tier gratuit "Qwen OAuth" a été arrêté en avril 2026. Nécessite une clé API (DashScope/OpenRouter) ou Ollama local.',
-    isFree: false,
-    defaultTokenLimit: 100000,
-    quotaLabel: 'Quota Qwen Code (API ou Local)',
-    icon: <Bot className="w-4 h-4 text-violet-400" />,
-  },
-  {
-    id: 'kimi',
-    label: 'Kimi K2 CLI',
-    subtitle: 'kimi',
-    badge: 'Crédits d’essai Moonshot ou Clé API',
-    tier: 'byok',
-    tierLabel: 'CLÉ API REQUISE',
-    costNotice:
-      'Attention : demande une clé API Moonshot AI (crédits d’essai à l’inscription, puis payant).',
-    isFree: false,
-    defaultTokenLimit: 120000,
-    quotaLabel: 'Quota API Moonshot (~120k tok)',
-    icon: <Flame className="w-4 h-4 text-amber-400" />,
-  },
-  {
-    id: 'aider',
-    label: 'Aider Pair AI',
-    subtitle: 'aider',
-    badge: 'Outil gratuit · Modèle Local ou API',
-    tier: 'byok',
-    tierLabel: 'SELON MODÈLE',
-    costNotice:
-      'L’outil est gratuit, mais le coût dépend du modèle : 0 € si branché sur Ollama, payant si branché sur une clé API.',
-    isFree: false,
-    defaultTokenLimit: 80000,
-    quotaLabel: 'Fenêtre de contexte Aider (~80k tok)',
-    icon: <Wrench className="w-4 h-4 text-lime-400" />,
-  },
-  {
-    id: 'opencode',
-    label: 'OpenCode CLI',
-    subtitle: 'opencode',
-    badge: 'Outil gratuit · Modèle Local ou API',
-    tier: 'byok',
-    tierLabel: 'SELON MODÈLE',
-    costNotice:
-      'L’outil est gratuit : 0 € avec les modèles gratuits/Ollama, payant si tu ajoutes une clé API payante.',
-    isFree: false,
-    defaultTokenLimit: 100000,
-    quotaLabel: 'Quota OpenCode (~100k tok)',
-    icon: <Globe className="w-4 h-4 text-pink-400" />,
-  },
-  {
-    id: 'shell',
-    label: 'System Shell',
-    subtitle: 'shell',
-    badge: 'PowerShell / Terminal Système',
-    tier: 'system',
-    tierLabel: 'SYSTÈME',
-    costNotice: 'Terminal Windows PowerShell classique de ton PC (0 €).',
-    isFree: true,
-    isUnlimitedLocal: true,
-    defaultTokenLimit: 100000,
-    quotaLabel: 'Shell Système · Sans limite',
-    icon: <TerminalIcon className="w-4 h-4 text-zinc-300" />,
-  },
-];
+export { AGY_MODELS, COMMAND_OPTIONS } from '../data/agentCatalog';
+export type { AgentOptionSpec, PricingTier } from '../data/agentCatalog';
 
 const STATUS_META: Record<
   AgentStatus,
@@ -263,63 +81,6 @@ const STATUS_META: Record<
     textClass: 'text-[#ef4444]',
   },
 };
-
-function stripAnsi(str: string): string {
-  return str
-    .replace(/\x1B\][^\x07\x1B]*(?:\x07|\x1B\\)?/g, '') // OSC (window title…) — was leaking "]0;C:\WINDOWS…"
-    .replace(/\x1B\[[0-?]*[ -/]*[@-~]/g, '') // CSI (colors, cursor moves)
-    .replace(/\x1B[@-Z\\-_]/g, '') // other 2-char escapes
-    .replace(/(^|\s)\]\d;[^\s\x07]*\x07?/g, '$1'); // OSC split across chunks (ESC in previous chunk)
-}
-
-/** A question on screen the CLI is waiting for (folder trust, login…): never type a mission into it. */
-const BLOCKING_DIALOG_RE =
-  /do you trust|trust (this|the) (folder|files|project|workspace|directory)|yes, i trust|enter to confirm|press enter to continue|select (a )?login method|sign in with|log ?in to (continue|your)|login required|choose (the|a) (text )?(style|theme)/i;
-/** The CLI is still producing its answer. */
-const WORKING_RE = /esc to (interrupt|cancel)|thinking\.\.\.|thinking…|working\.\.\.|working…/i;
-/** Interface chrome that is not part of an answer (input box, hints, footers). */
-const CHROME_LINE_RE =
-  /\? for shortcuts|esc to (interrupt|cancel|dismiss)|ctrl\+|shift\+tab|auto-accept|auto mode|bypass permissions|context left|tokens? (used|left)|for (help|commands)|type your message|^\s*[✻✳✢✶✽]\s|\b\w+(ed|t) for \d+(\.\d+)?\s*(s|m|ms)\b|\bdone \d{1,2}:\d{2}|\d+ tokens\b|update installed|restart to update|\/effort\b|\/model\b/i;
-
-function countLetters(text: string): number {
-  return (text.match(/[A-Za-zÀ-ÿ]/g) || []).length;
-}
-
-/** Turn raw terminal text into a clean answer: drop box borders, empty prompt lines and UI hints. */
-function cleanReplyText(text: string): string {
-  return text
-    .split(/\r?\n/)
-    .map((line) => line.replace(/[│┃╭╮╰╯─━┏┓┗┛▐▌▛▜▝▘]/g, ' ').trim())
-    .filter((line) => countLetters(line) >= 2 && !CHROME_LINE_RE.test(line) && !/^[>❯›]\s*$/.test(line))
-    .join('\n')
-    .trim();
-}
-
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
-/**
- * Keep only what the agent printed AFTER the echo of the prompt we sent.
- * Windows ConPTY sometimes repaints the whole visible screen (old output included) when text scrolls;
- * without this, that old text was relayed to teammates as if it were the agent's answer.
- */
-function stripEchoedPrompt(buffer: string, sentPrompt: string): string {
-  if (!sentPrompt) return buffer;
-  // Compare only plain ASCII letters/digits: terminals may alter accents, "·", commas or wrap lines.
-  const plain = (text: string) => text.normalize('NFD').replace(/[^A-Za-z0-9]/g, '');
-  const marker = plain(sentPrompt).slice(-40); // long enough that an answer quoting the question can't match
-  if (marker.length < 4) return buffer;
-  let compact = '';
-  const indexMap: number[] = [];
-  for (let i = 0; i < buffer.length; i++) {
-    for (const ch of plain(buffer[i])) {
-      compact += ch;
-      indexMap.push(i);
-    }
-  }
-  const pos = compact.lastIndexOf(marker);
-  if (pos < 0) return buffer;
-  return buffer.slice(indexMap[pos + marker.length - 1] + 1);
-}
 
 export const ConsoleNode: React.FC<NodeProps> = ({ id, data, selected }) => {
   const nodeData = data as unknown as ConsoleNodeData;
@@ -461,6 +222,12 @@ export const ConsoleNode: React.FC<NodeProps> = ({ id, data, selected }) => {
     if (!raw) raw = stripEchoedPrompt(ptyTurnBufferRef.current, sentPrompt);
     ptyTurnBufferRef.current = '';
     const reply = cleanReplyText(raw);
+    const failure = detectCliFailure(reply);
+    if (failure) {
+      // Never relay an account/API error to teammates as if it were an answer.
+      setAttention(failure);
+      return;
+    }
     const isRealAnswer = countLetters(reply) >= 12;
     if (!isRealAnswer && reason !== 'exit') return;
     recordAgentReply({
@@ -1115,9 +882,16 @@ export const ConsoleNode: React.FC<NodeProps> = ({ id, data, selected }) => {
   const handleSelectCommand = (cmd: AgentCommandType) => {
     setSelectedCmd(cmd);
     const spec = COMMAND_OPTIONS.find((o) => o.id === cmd);
+    const changed = cmd !== nodeData.commandType;
+    if (changed) {
+      // Usage counted for the previous AI does not belong to the new one.
+      tokensRef.current = 0;
+      promptsRef.current = 0;
+    }
     nodeData.onUpdateNode?.(id, {
       commandType: cmd,
       tokenLimit: spec?.defaultTokenLimit || 50000,
+      ...(changed ? { estimatedTokens: 0, promptsSent: 0, rateLimitWarning: undefined, attentionRequired: undefined } : {}),
     });
   };
 

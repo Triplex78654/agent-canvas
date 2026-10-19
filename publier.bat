@@ -18,18 +18,25 @@ for /f "delims=" %%v in ('node -p "require('./package.json').version"') do set "
 echo ============================================================
 echo   Publication d'Agent Canvas %VER%
 echo ============================================================
-echo [1/4] Fabrication de l'installateur (2 a 5 minutes)...
-call npm run dist:win > publier.log 2>&1 || goto fail
-echo [2/4] Enregistrement dans git...
+echo [1/5] Installation des dependances et tests automatiques...
+call npm install --no-audit --no-fund > publier.log 2>&1 || goto fail
+call npm test >> publier.log 2>&1 || goto testfail
+echo [2/5] Fabrication de l'installateur (2 a 5 minutes)...
+call npm run dist:win >> publier.log 2>&1 || goto fail
+echo [3/5] Enregistrement dans git...
 git add -A
 git commit -q -m "Version %VER%" >nul 2>nul
 git push -q >> publier.log 2>&1 || goto fail
-echo [3/4] Mise en ligne sur GitHub...
+echo [4/5] Mise en ligne sur GitHub...
 gh release create v%VER% "release\Agent-Canvas-Setup-%VER%.exe" "release\Agent-Canvas-Setup-%VER%.exe.blockmap" "release\latest.yml" --title "Agent Canvas %VER%" --generate-notes --target main >> publier.log 2>&1 || goto fail
-echo [4/4] Termine ! Version %VER% en ligne : les utilisateurs la recevront via le bouton "Mises a jour".
+echo [5/5] Termine ! Version %VER% en ligne : les utilisateurs la recevront via le bouton "Mises a jour".
 echo OK %VER%> publier.result
 endlocal
 exit /b 0
+
+:testfail
+echo Un test automatique a echoue : rien n'a ete publie.
+goto fail
 
 :nogh
 echo GitHub CLI manquant ou pas connecte : lance d'abord connexion-github.bat
