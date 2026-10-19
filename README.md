@@ -19,7 +19,7 @@ Un canvas infini pour piloter **plusieurs IA en ligne de commande en même temps
 2. Lance-le. L'app n'étant pas signée, Windows peut afficher « Windows a protégé votre ordinateur » : clique sur **Informations complémentaires**, puis **Exécuter quand même**.
 3. Au premier lancement, l'écran **« Mes IA »** te dit quelles IA sont déjà installées et comment installer les autres.
 
-Les mises à jour sont automatiques : une nouvelle version se télécharge en arrière-plan, puis un bouton **« Mise à jour prête · Redémarrer »** apparaît en haut à droite.
+Les mises à jour se font **dans l'app** : elle vérifie toute seule au démarrage (et toutes les 6 h), ou via le bouton **Mises à jour** en haut à droite. La nouvelle version se télécharge en arrière-plan, puis le bouton affiche **« vX.Y.Z prête · Redémarrer »**. Pas besoin de retourner sur GitHub.
 
 ### Installer au moins une IA
 
@@ -61,10 +61,9 @@ npm run dist:win     # crée l'installateur dans release/
 
 ### Publier une nouvelle version
 
-1. Augmente `version` dans `package.json` (ex. `1.4.0` → `1.4.1`) et commit.
-2. Lance `npm run dist:win`.
-3. Sur GitHub, crée une **Release** avec le tag `v1.4.1` et joins-y les fichiers de `release/` :
-   `Agent-Canvas-Setup-1.4.1.exe`, `Agent-Canvas-Setup-1.4.1.exe.blockmap` et **`latest.yml`** (indispensable pour les mises à jour automatiques).
+1. **Une seule fois** : double-clique sur `connexion-github.bat` (installe GitHub CLI si besoin et connecte ce PC à ton compte GitHub).
+2. **À chaque version** : double-clique sur `publier.bat`. Il augmente le numéro de version, fabrique l'installateur, enregistre le code sur GitHub et met la release en ligne (avec `latest.yml`).
+3. Les utilisateurs reçoivent la nouvelle version tout seuls (vérification au démarrage, toutes les 6 h, ou via le bouton **Mises à jour** de l'app).
 
 Stack : Electron, React, TypeScript, Vite, Tailwind, React Flow (`@xyflow/react`), xterm.js, node-pty.
 

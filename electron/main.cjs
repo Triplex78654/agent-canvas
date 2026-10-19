@@ -484,34 +484,58 @@ ipcMain.handle('storage:getPath', (event) => {
 });
 
 /**
- * Auto-update (installed app only): checks the GitHub releases of the project, downloads in the background
- * and installs the new version the next time the app is closed. Never runs in dev mode.
+ * Updates (installed app only): checks the GitHub releases of the project, downloads in the background and
+ * installs on restart. Checked automatically at startup and every 6h, or on demand from the "Mises à jour" button.
+ * Every step is reported to the interface through the 'app:update' channel.
  */
+let autoUpdater = null;
+function sendUpdateState(payload) {
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('app:update', payload);
+}
+
 function setupAutoUpdates() {
+  ipcMain.handle('app:checkUpdate', async (event) => {
+    if (!isTrustedIpc(event)) return { state: 'error' };
+    if (!autoUpdater) {
+      return { state: app.isPackaged ? 'error' : 'unavailable', message: "Les mises à jour ne fonctionnent que dans l'app installée." };
+    }
+    try {
+      await autoUpdater.checkForUpdates();
+      return { state: 'checking' };
+    } catch (err) {
+      return { state: 'error', message: err?.message || String(err) };
+    }
+  });
+  ipcMain.handle('app:installUpdate', (event) => {
+    if (!isTrustedIpc(event) || !autoUpdater) return false;
+    setImmediate(() => autoUpdater.quitAndInstall());
+    return true;
+  });
+
   if (!app.isPackaged || ISOLATED_TEST_MODE) return;
-  let autoUpdater;
   try {
     ({ autoUpdater } = require('electron-updater'));
   } catch (err) {
     console.warn('[Updater] electron-updater unavailable:', err.message);
+    autoUpdater = null;
     return;
   }
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
-  const notify = (payload) => {
-    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('app:update', payload);
-  };
-  autoUpdater.on('update-available', (info) => notify({ state: 'downloading', version: info?.version }));
-  autoUpdater.on('update-downloaded', (info) => notify({ state: 'ready', version: info?.version }));
-  autoUpdater.on('error', (err) => console.warn('[Updater]', err?.message || err));
-  const check = () => autoUpdater.checkForUpdates().catch((err) => console.warn('[Updater] check failed:', err?.message || err));
+  autoUpdater.on('checking-for-update', () => sendUpdateState({ state: 'checking' }));
+  autoUpdater.on('update-not-available', () => sendUpdateState({ state: 'up-to-date', version: app.getVersion() }));
+  autoUpdater.on('update-available', (info) => sendUpdateState({ state: 'downloading', version: info?.version, percent: 0 }));
+  autoUpdater.on('download-progress', (p) =>
+    sendUpdateState({ state: 'downloading', percent: Math.round(p?.percent || 0) })
+  );
+  autoUpdater.on('update-downloaded', (info) => sendUpdateState({ state: 'ready', version: info?.version }));
+  autoUpdater.on('error', (err) => {
+    console.warn('[Updater]', err?.message || err);
+    sendUpdateState({ state: 'error', message: 'Impossible de vérifier les mises à jour (pas de connexion ?).' });
+  });
+  const check = () => autoUpdater.checkForUpdates().catch(() => {});
   setTimeout(check, 10_000);
   setInterval(check, 6 * 60 * 60 * 1000);
-  ipcMain.handle('app:installUpdate', (event) => {
-    if (!isTrustedIpc(event)) return false;
-    setImmediate(() => autoUpdater.quitAndInstall());
-    return true;
-  });
 }
 
 app.whenReady().then(() => {

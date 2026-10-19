@@ -187,6 +187,13 @@ export interface StorageSaveResult {
   error?: string;
 }
 
+export interface AppUpdateState {
+  state: 'checking' | 'up-to-date' | 'downloading' | 'ready' | 'error' | 'unavailable';
+  version?: string;
+  percent?: number;
+  message?: string;
+}
+
 export interface DetectedCli {
   id: string;
   binary: string;
@@ -231,7 +238,8 @@ export interface AgentCanvasBridge {
   detectClis?: () => Promise<DetectedCli[]>;
   getAppInfo?: () => Promise<{ version: string; packaged: boolean; platform: string } | null>;
   installUpdate?: () => Promise<boolean>;
-  onAppUpdate?: (cb: (payload: { state: 'downloading' | 'ready'; version?: string }) => void) => () => void;
+  checkUpdate?: () => Promise<AppUpdateState>;
+  onAppUpdate?: (cb: (payload: AppUpdateState) => void) => () => void;
 
   onPtyData: (cb: (payload: { id: string; data: string; replay?: boolean }) => void) => () => void;
   onPtyStatus: (cb: (payload: { id: string; status: AgentStatus }) => void) => () => void;

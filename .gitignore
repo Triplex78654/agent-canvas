@@ -5,4 +5,5 @@ release/
 *.tsbuildinfo
 _backup-avant-corrections/
 *.log
-build-installer.result
+*.result
+*.lnk

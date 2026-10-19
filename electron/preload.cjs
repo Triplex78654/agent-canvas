@@ -16,6 +16,7 @@ contextBridge.exposeInMainWorld('agentCanvasAPI', {
   detectClis: () => ipcRenderer.invoke('cli:detect'),
   getAppInfo: () => ipcRenderer.invoke('app:info'),
   installUpdate: () => ipcRenderer.invoke('app:installUpdate'),
+  checkUpdate: () => ipcRenderer.invoke('app:checkUpdate'),
   onAppUpdate: (callback) => {
     const listener = (_event, payload) => callback(payload);
     ipcRenderer.on('app:update', listener);

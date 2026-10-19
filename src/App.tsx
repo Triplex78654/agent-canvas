@@ -53,6 +53,7 @@ import { TriggerNode, TriggerNodeData } from './components/TriggerNode';
 import { AnimatedCableEdge } from './components/AnimatedCableEdge';
 import { FloatingDock } from './components/FloatingDock';
 import { OnboardingModal, isOnboardingDone } from './components/OnboardingModal';
+import type { AppUpdateState } from './types';
 import { ApiKeysModal } from './components/ApiKeysModal';
 import { AiHelpModal } from './components/AiHelpModal';
 import { SupportModal } from './components/SupportModal';
@@ -3294,8 +3295,30 @@ export default function App() {
   const [showTutorialModal, setShowTutorialModal] = useState(
     () => !localStorage.getItem(TUTORIAL_SEEN_KEY) && !(Boolean(window.agentCanvasAPI) && !isOnboardingDone())
   );
-  const [appUpdate, setAppUpdate] = useState<{ state: 'downloading' | 'ready'; version?: string } | null>(null);
-  useEffect(() => window.agentCanvasAPI?.onAppUpdate?.((payload) => setAppUpdate(payload)), []);
+  const [appUpdate, setAppUpdate] = useState<AppUpdateState | null>(null);
+  const [appVersion, setAppVersion] = useState<string>('');
+  useEffect(() => {
+    window.agentCanvasAPI?.getAppInfo?.().then((info) => info && setAppVersion(info.version));
+    return window.agentCanvasAPI?.onAppUpdate?.((payload) => setAppUpdate(payload));
+  }, []);
+  // "À jour" / errors fade out after a few seconds; downloading and ready stay visible.
+  useEffect(() => {
+    if (!appUpdate || !['up-to-date', 'error', 'unavailable'].includes(appUpdate.state)) return;
+    const timer = setTimeout(() => setAppUpdate(null), 6000);
+    return () => clearTimeout(timer);
+  }, [appUpdate]);
+  const handleUpdateClick = useCallback(async () => {
+    const api = window.agentCanvasAPI;
+    if (!api) return;
+    if (appUpdate?.state === 'ready') {
+      api.installUpdate?.();
+      return;
+    }
+    if (appUpdate?.state === 'downloading' || appUpdate?.state === 'checking') return;
+    setAppUpdate({ state: 'checking' });
+    const res = await api.checkUpdate?.();
+    if (res && res.state !== 'checking') setAppUpdate(res);
+  }, [appUpdate]);
   const [showAiHelpModal, setShowAiHelpModal] = useState(false);
   const [aiHelpTarget, setAiHelpTarget] = useState<{
     agent: AgentCommandType;
@@ -3768,19 +3791,39 @@ export default function App() {
             </button>
           )}
 
-          {/* Installed app: a new version was downloaded from GitHub */}
-          {appUpdate && (
+          {/* Desktop app: check / download / install updates without leaving the app */}
+          {Boolean(window.agentCanvasAPI) && (
             <button
               type="button"
-              onClick={() => appUpdate.state === 'ready' && window.agentCanvasAPI?.installUpdate?.()}
-              disabled={appUpdate.state !== 'ready'}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-2xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/40 shadow-card text-xs text-emerald-200 transition-colors disabled:cursor-default"
-              title={appUpdate.state === 'ready' ? 'Redémarrer Agent Canvas pour installer la nouvelle version' : 'Téléchargement en cours'}
+              onClick={handleUpdateClick}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-2xl backdrop-blur-xl shadow-card text-xs transition-colors cursor-pointer border ${
+                appUpdate?.state === 'ready'
+                  ? 'bg-emerald-500/20 hover:bg-emerald-500/30 border-emerald-500/50 text-emerald-200 animate-pulse'
+                  : appUpdate?.state === 'error'
+                  ? 'bg-red-500/10 border-red-500/40 text-red-300'
+                  : 'bg-[#1c1a22]/90 hover:bg-[#24212c] border-[#2d2a37] text-zinc-200'
+              }`}
+              title={
+                appUpdate?.message ||
+                (appUpdate?.state === 'ready'
+                  ? 'Redémarrer Agent Canvas pour installer la nouvelle version'
+                  : `Version installée : ${appVersion || '?'} · cliquer pour rechercher une mise à jour`)
+              }
             >
               <span className="font-semibold">
-                {appUpdate.state === 'ready'
-                  ? `Mise à jour ${appUpdate.version ? `v${appUpdate.version} ` : ''}prête · Redémarrer`
-                  : 'Téléchargement de la mise à jour…'}
+                {!appUpdate
+                  ? 'Mises à jour'
+                  : appUpdate.state === 'checking'
+                  ? 'Recherche…'
+                  : appUpdate.state === 'up-to-date'
+                  ? `À jour ✓${appVersion ? ` (v${appVersion})` : ''}`
+                  : appUpdate.state === 'downloading'
+                  ? `Téléchargement ${appUpdate.percent ?? 0} %`
+                  : appUpdate.state === 'ready'
+                  ? `v${appUpdate.version || ''} prête · Redémarrer`
+                  : appUpdate.state === 'unavailable'
+                  ? 'Mode développement'
+                  : 'Erreur de mise à jour'}
               </span>
             </button>
           )}
